@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lobby · Scrabble at Home</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo small" href="/">SCRABBLE <span class="muted">at home</span></a>
+    <span class="who">Hi, <b>{{ user }}</b> · <a href="/logout">log out</a></span>
+  </header>
+
+  <main class="lobby">
+    <section class="card">
+      <h2>Start a new game</h2>
+      <form id="new-game" class="row">
+        <input id="game-name" maxlength="40" placeholder="Game name (optional)">
+        <button class="btn primary" type="submit">New game</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Games</h2>
+      <div id="games"><p class="muted">Loading…</p></div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='lobby.js') }}"></script>
+</body>
+</html>

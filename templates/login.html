@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrabble at Home</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="center-page">
+  <form class="card login-card" method="post">
+    <h1 class="logo tiles-logo"><span>S</span><span>C</span><span>R</span><span>A</span><span>B</span><span>B</span><span>L</span><span>E</span></h1>
+    <p class="muted">at home</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <label>Your name
+      <input name="username" value="{{ username }}" maxlength="20" autocomplete="nickname" required autofocus>
+    </label>
+    <label>Password
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary" type="submit">Let's play</button>
+  </form>
+</body>
+</html>

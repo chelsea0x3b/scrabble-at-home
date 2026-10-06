@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrabble at Home</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo small" href="/">SCRABBLE <span class="muted">at home</span></a>
+    <span id="game-title" class="game-title"></span>
+    <span class="who"><a href="/">← lobby</a> · <b>{{ user }}</b></span>
+  </header>
+
+  <!-- Waiting room -->
+  <main id="pending-view" class="lobby" hidden>
+    <section class="card">
+      <h2>Waiting for players</h2>
+      <p class="muted">Share this page's link. 2–4 players can join; the game starts when everyone is ready.</p>
+      <ul id="pending-players" class="player-list"></ul>
+      <div class="row">
+        <button id="join-btn" class="btn primary">Join game</button>
+        <button id="ready-btn" class="btn primary">I'm ready</button>
+        <button id="leave-btn" class="btn">Leave</button>
+        <button id="delete-btn" class="btn danger">Delete game</button>
+      </div>
+      <p id="pending-msg" class="muted"></p>
+    </section>
+  </main>
+
+  <!-- Game in progress / finished -->
+  <main id="play-view" class="play" hidden>
+    <aside class="panel history-panel">
+      <h3>Turn history</h3>
+      <ol id="history"></ol>
+    </aside>
+
+    <section class="center">
+      <div id="scores" class="scores"></div>
+      <div id="banner" class="banner" hidden></div>
+      <div id="board" class="board"></div>
+
+      <div class="rack-area">
+        <div id="rack" class="rack"></div>
+        <div class="controls">
+          <button id="shuffle-btn" class="btn" title="Shuffle your tiles">Shuffle</button>
+          <button id="recall-btn" class="btn" title="Bring tiles back to your rack">Recall</button>
+          <button id="submit-btn" class="btn primary">Submit</button>
+          <button id="exchange-btn" class="btn">Exchange</button>
+          <button id="pass-btn" class="btn">Pass</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+    </section>
+
+    <aside class="panel words-panel">
+      <h3>2-letter words</h3>
+      <div class="two-letter">
+        {% for w in two_letter_words %}<span>{{ w }}</span>{% endfor %}
+      </div>
+      <p class="muted small">Tiles left in bag: <b id="bag-count">–</b></p>
+    </aside>
+  </main>
+
+  <!-- Blank tile letter picker -->
+  <div id="blank-modal" class="modal" hidden>
+    <div class="card">
+      <h3>Choose a letter for the blank</h3>
+      <div id="blank-letters" class="blank-letters"></div>
+      <button id="blank-cancel" class="btn">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    window.GAME_ID = {{ game_id|tojson }};
+    window.ME = {{ user|tojson }};
+    window.PREMIUMS = {{ premiums|tojson }};
+    window.LETTER_VALUES = {{ letter_values|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='game.js') }}"></script>
+</body>
+</html>
