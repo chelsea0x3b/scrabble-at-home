@@ -240,9 +240,40 @@ function landTiles() {
       { transform: "scale(0.94)", opacity: 1, zIndex: 3, offset: 0.7 },
       { transform: "none", zIndex: 3 },
     ], { duration: 280, delay: i * 70, easing: "ease-in", fill: "backwards" });
+    setTimeout(() => sparks(r, c), i * 70 + 196);  // the moment it touches down (70% of the drop)
   });
   // Pass & play holds the hand-off screen until the last tile is down, plus a beat to see it.
   landingUntil = performance.now() + 280 + (sorted.length - 1) * 70 + 600;
+}
+
+// A little burst of tick marks flying out from a tile's edges as it hits the board: three
+// along each side plus one off each corner, moving outward so they keep the tile's square shape.
+// They live on <body> so a board re-render mid-burst doesn't cut them off.
+function sparks(r, c) {
+  const cell = $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+  if (!cell) return;
+  const box = cell.getBoundingClientRect();
+  const size = box.width, h = size / 2;
+  const len = size * 0.18, gap = size * 0.08, travel = size * 0.3;
+  const ticks = [];  // [x, y, angle] from the tile's centre; angle 0 points up
+  for (const o of [-h / 2, 0, h / 2]) ticks.push([o, -h, 0], [h, o, 90], [o, h, 180], [-h, o, 270]);
+  for (const [x, y, a] of [[h, -h, 45], [h, h, 135], [-h, h, 225], [-h, -h, 315]]) ticks.push([x, y, a]);
+  for (const [x, y, angle] of ticks) {
+    const diag = angle % 90 ? Math.SQRT2 : 1;  // corners travel diagonally to stay on the square
+    const el = document.createElement("div");
+    el.className = "spark";
+    el.style.left = box.left + h + "px";
+    el.style.top = box.top + box.height / 2 + "px";
+    el.style.width = Math.max(1.5, size * 0.045) + "px";
+    el.style.height = len + "px";
+    document.body.appendChild(el);
+    const at = (dist, stretch) =>
+      `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${angle}deg) translateY(${-dist * diag}px) scaleY(${stretch})`;
+    el.animate([
+      { transform: at(gap + len / 2, 1), opacity: 1 },
+      { transform: at(gap + len / 2 + travel, 0.3), opacity: 0 },
+    ], { duration: 380, easing: "cubic-bezier(.2, .7, .4, 1)" }).onfinish = () => el.remove();
+  }
 }
 
 function renderRack() {

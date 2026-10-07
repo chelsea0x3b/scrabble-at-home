@@ -270,6 +270,8 @@ input {
 }
 .cell.landing::after { animation: land-shadow 280ms ease-in var(--land-delay, 0s) both; }
 @keyframes land-shadow { 70%, 100% { box-shadow: 0 0 0 rgba(46, 31, 82, 0); } }
+/* Sparks that fly off a tile as it lands (see sparks in game.js). */
+.spark { position: fixed; z-index: 50; pointer-events: none; border-radius: 999px; background: var(--text); }
 @media (prefers-reduced-motion: reduce) { .board .tile.pending { animation: none; } }
 /* Valid = solid blue, invalid = dashed orange, last play = solid dark: distinguishable without relying on red vs green. */
 .board .tile.pending.invalid { outline: 3px dashed var(--word-bad); outline-offset: 1px; }
