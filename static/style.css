@@ -289,6 +289,8 @@ input {
 .icon-btn:hover:not(:disabled) { background: var(--accent-soft); }
 .icon-btn:disabled { opacity: .45; cursor: default; }
 .icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Recall points toward the rack: left when it's beside the board, down when it's below. */
+#recall-btn svg { transform: rotate(90deg); }
 .rack {
   /* Row width minus the six 4px gaps between tiles. */
   --t: min(52px, calc((100cqw - 24px) / 7));
@@ -335,6 +337,7 @@ input {
   .score-card { flex: 1 1 120px; }
   .center { order: 1; }
   .rack-area { order: 2; }
+  #recall-btn svg { transform: none; }
   .history-panel { order: 3; margin-top: 0; }
   .words-panel { order: 4; }
   #history { max-height: 260px; }
