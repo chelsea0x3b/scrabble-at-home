@@ -2,12 +2,11 @@
 """Scrabble at Home — a small Flask server for playing Scrabble with family.
 
 Usage:
-    python3 app.py                      # prompts for the shared password
+    python3 app.py                      # shared password is "default"
     python3 app.py --password hunter2 --port 8000
 """
 
 import argparse
-import getpass
 import hmac
 import secrets
 import socket
@@ -23,6 +22,8 @@ from scrabble import LETTER_VALUES, Game, GameError, evaluate_move, premium_boar
 app = Flask(__name__)
 app.config["PASSWORD"] = None
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Pick up template edits without a restart (a restart would end every game in progress).
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.permanent_session_lifetime = 60 * 60 * 24 * 90
 
 lock = threading.Lock()
@@ -238,16 +239,12 @@ def lan_ip():
 def main():
     global dictionary
     parser = argparse.ArgumentParser(description="Host a Scrabble game for your family.")
-    parser.add_argument("--password", help="Shared password everyone uses to log in (prompted if omitted)")
+    parser.add_argument("--password", default="default", help='Shared password everyone uses to log in (default: "default")')
     parser.add_argument("--host", default="0.0.0.0", help="Interface to listen on (default: all)")
     parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
     args = parser.parse_args()
 
-    password = args.password
-    while not password:
-        password = getpass.getpass("Set the game password: ").strip()
-
-    app.config["PASSWORD"] = password
+    app.config["PASSWORD"] = args.password
     # A fresh key each run: restarting the server logs everyone out (games are in memory only).
     app.secret_key = secrets.token_hex(32)
     dictionary = Dictionary()
@@ -256,6 +253,8 @@ def main():
     print(f"Scrabble at Home is running:")
     print(f"  This computer:  http://localhost:{args.port}")
     print(f"  Your network:   http://{lan_ip()}:{args.port}")
+    if args.password == "default":
+        print('  Password:       "default" (use --password to set your own before sharing it outside your home)')
     serve(app, host=args.host, port=args.port, threads=8)
 
 

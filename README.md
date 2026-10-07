@@ -6,7 +6,7 @@ A small self-hosted Scrabble site for 2–4 players. Python 3 + Flask, plain HTM
 
 ```bash
 pip3 install -r requirements.txt
-python3 app.py                       # prompts you to set the shared password
+python3 app.py                       # shared password is "default"
 python3 app.py --password hunter2 --port 8000
 ```
 
@@ -49,6 +49,8 @@ OK, EW and ZE are not included.
 ## Data
 
 Games live in memory only. Restarting the server ends all games and logs everyone out.
+Edits to templates, CSS and JS show up on a page refresh without a restart; changes to the
+Python code need one.
 
 ## Tests
 
