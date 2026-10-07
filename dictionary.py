@@ -3,7 +3,7 @@
 import os
 import zipfile
 
-DEFAULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "twl06.zip")
+DEFAULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets/twl06.zip")
 
 
 class Dictionary:
