@@ -168,7 +168,7 @@ input {
   display: flex; justify-content: space-between; gap: 8px;
   padding: 6px 2px; border-bottom: 1px solid var(--line);
 }
-#history li.h-start, #history li.h-end, #history li.h-info { color: var(--muted); font-style: italic; }
+#history li.h-draw, #history li.h-start, #history li.h-end, #history li.h-info { color: var(--muted); font-style: italic; }
 #history li.h-end { color: var(--accent-strong); font-weight: 600; font-style: normal; }
 .pts { font-weight: 700; color: var(--accent-strong); white-space: nowrap; }
 .pts.neg { color: var(--danger); }
@@ -316,6 +316,7 @@ input {
 .letter-btn { padding: 8px 0; }
 .modal.handoff { background: var(--board); }
 .modal.handoff h2 { font-size: 28px; margin-bottom: 20px; }
+#handoff-last { white-space: pre-line; }
 
 
 /* ---------- small screens ---------- */

@@ -166,9 +166,10 @@ function renderHandoff() {
   if (!show) return;
   $("handoff-name").textContent = state.players[state.turn_index].name;
   const last = [...state.history].reverse().find((h) => h.player);
+  // Before anyone has played, show the draw for turn order instead.
   $("handoff-last").textContent = last
     ? `${last.player} ${last.text}${last.kind === "play" ? ` for ${last.score} points` : ""}.`
-    : "";
+    : state.history.filter((h) => h.kind === "draw" || h.kind === "start").map((h) => h.text).join("\n");
 }
 
 function tileHTML(letter, { blank = false, extra = "", id = null } = {}) {

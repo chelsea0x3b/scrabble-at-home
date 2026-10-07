@@ -262,13 +262,51 @@ class Game:
     def start(self):
         self.status = "active"
         self.bag = new_bag()
+        self.players = self._draw_for_order()
         for p in self.players:
             p["rack"] = self.draw(RACK_SIZE)
-        random.shuffle(self.players)  # random turn order; the first in the list goes first
         self.turn = 0
-        order = " → ".join(p["name"] for p in self.players)
-        self.log(None, "start", f"Game started. Turn order: {order}. {self.players[0]['name']} goes first!")
+        names = [p["name"] for p in self.players]
+        self.log(None, "start", f"{names[0]} goes first, " + ", ".join(f"then {n}" for n in names[1:]) + ".")
         self.touch()
+
+    def _draw_for_order(self):
+        """Each player draws a tile; closest to A goes first and a blank beats everything.
+
+        Players who tie redraw among themselves. Logs each round, then returns every drawn
+        tile to the bag and reshuffles it. Returns the players in turn order.
+        """
+        drawn = []
+
+        def tile_name(t):
+            return "a blank" if t == "?" else t
+
+        def rank(t):
+            return -1 if t == "?" else ord(t)
+
+        def settle(group, intro):
+            if len(self.bag) < len(group):  # practically impossible; don't loop forever
+                random.shuffle(group)
+                return group
+            draws = [(p, self.bag.pop()) for p in group]
+            drawn.extend(t for _, t in draws)
+            self.log(None, "draw", intro + ", ".join(f"{p['name']} drew {tile_name(t)}" for p, t in draws) + ".")
+            ordered = []
+            for tile in sorted({t for _, t in draws}, key=rank):
+                tied = [p for p, t in draws if t == tile]
+                if len(tied) == 1:
+                    ordered += tied
+                else:
+                    names = [p["name"] for p in tied]
+                    who = ", ".join(names[:-1]) + " and " + names[-1]
+                    both = "both" if len(tied) == 2 else "all"
+                    ordered += settle(tied, f"{who} {both} drew {tile_name(tile)} and redrew: ")
+            return ordered
+
+        order = settle(list(self.players), "🎲 Drawing for turn order: ")
+        self.bag.extend(drawn)
+        random.shuffle(self.bag)
+        return order
 
     # ---- play ----
     def draw(self, n):

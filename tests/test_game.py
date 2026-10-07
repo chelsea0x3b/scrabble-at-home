@@ -3,12 +3,15 @@
 import os
 import sys
 import unittest
+from collections import Counter
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app as server  # noqa: E402
 from dictionary import Dictionary  # noqa: E402
-from scrabble import Game, GameError  # noqa: E402
+import scrabble  # noqa: E402
+from scrabble import DISTRIBUTION, Game, GameError  # noqa: E402
 
 DICT = Dictionary()
 
@@ -62,6 +65,43 @@ class LobbyFlow(unittest.TestCase):
             game.add_player(n)
         with self.assertRaises(GameError):
             game.add_player("E")
+
+
+def rigged_bag(*draws):
+    """A full bag whose last tiles (popped first) are `draws`, in the order they'll be drawn."""
+    rest = Counter(DISTRIBUTION) - Counter(draws)
+    return [t for t, n in rest.items() for _ in range(n)] + list(reversed(draws))
+
+
+class DrawForOrder(unittest.TestCase):
+    def start(self, *draws):
+        game = Game("t", "A")
+        game.add_player("B")
+        game.add_player("C")
+        with mock.patch.object(scrabble, "new_bag", return_value=rigged_bag(*draws)):
+            game.start_game("A")
+        return game
+
+    def test_closest_to_a_goes_first_and_blank_beats_everything(self):
+        game = self.start("M", "?", "C")  # A, B, C draw in seat order
+        self.assertEqual([p["name"] for p in game.players], ["B", "C", "A"])
+        self.assertEqual(
+            [h["text"] for h in game.history],
+            ["🎲 Drawing for turn order: A drew M, B drew a blank, C drew C.",
+             "B goes first, then C, then A."],
+        )
+
+    def test_ties_redraw_among_the_tied_players(self):
+        game = self.start("E", "E", "A", "T", "B")  # A and B tie on E, then draw T and B
+        self.assertEqual([p["name"] for p in game.players], ["C", "B", "A"])
+        self.assertEqual(game.history[1]["text"], "A and B both drew E and redrew: A drew T, B drew B.")
+
+    def test_drawn_tiles_go_back_before_the_deal(self):
+        game = self.start("M", "?", "C")
+        tiles = game.bag + [t for p in game.players for t in p["rack"]]
+        self.assertEqual(Counter(tiles), Counter(DISTRIBUTION))
+        self.assertEqual(len(game.bag), 100 - 21)
+
 
 
 class Exchange(unittest.TestCase):
