@@ -314,10 +314,10 @@ class Game:
         tiles, self.bag = self.bag[:n], self.bag[n:]
         return tiles
 
-    def log(self, player, kind, text, score=0, words=None):
+    def log(self, player, kind, text, score=0, words=None, cells=None):
         self.history.append({
             "player": player, "kind": kind, "text": text, "score": score,
-            "words": words or [], "t": time.time(),
+            "words": words or [], "cells": cells or [], "t": time.time(),
         })
 
     def _require_turn(self, name):
@@ -361,7 +361,7 @@ class Game:
         if result["bingo"]:
             text += " — BINGO!"
         words = [{"word": w["word"], "score": w["score"]} for w in result["words"]]
-        self.log(name, "play", text, result["score"], words)
+        self.log(name, "play", text, result["score"], words, self.last_move)
 
         if not p["rack"] and not self.bag:
             self._finish(went_out=p)

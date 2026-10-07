@@ -211,11 +211,14 @@ function renderBoard() {
   landTiles();
 }
 
-// When a new play appears on the board, drop its tiles into place one after another.
-// Your own tiles fall from their hover; anyone else's fall from a little higher up.
+// When a new play appears on the board, drop its tiles into place one at a time, each landing
+// before the next one falls. Your own tiles fall from their hover; anyone else's from higher up.
+const DROP_MS = 280;
+const IMPACT_MS = DROP_MS * 0.7;  // when a falling tile touches down
 let landedMove = null;
 let justSubmitted = false;
 let landingUntil = 0;
+let sparkTimers = [];
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 function landTiles() {
@@ -227,23 +230,48 @@ function landTiles() {
   const mine = justSubmitted;
   justSubmitted = false;
   if (first || !move.length || reduceMotion.matches) return;
+  // Pass & play holds the hand-off screen until the last tile is down, plus a beat to see it.
+  landingUntil = performance.now() + dropTiles(move, { mine }) + 600;
+}
+
+// Drops the tiles on these cells in reading order, starting after `delay` ms.
+// Returns when (ms from now) the last one has landed.
+function dropTiles(cells, { mine = false, delay = 0 } = {}) {
   const lift = mine ? "translateY(-3px) scale(1.06)" : "translateY(-14px) scale(1.25)";
   const shadow = mine ? "0 5px 8px rgba(46, 31, 82, .35)" : "0 12px 14px rgba(46, 31, 82, .3)";
-  const sorted = [...move].sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
+  const sorted = [...cells].sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
   sorted.forEach(([r, c], i) => {
+    const start = delay + i * DROP_MS;
     const cell = $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    const tile = cell.querySelector(".tile");
+    if (!tile) return;
+    tile.getAnimations().forEach((a) => a.cancel());
+    cell.classList.remove("landing");
+    void cell.offsetWidth;  // restart the shadow animation if it's already run
     cell.classList.add("landing");
-    cell.style.setProperty("--land-delay", `${i * 70}ms`);
+    cell.style.setProperty("--land-delay", `${start}ms`);
     cell.style.setProperty("--land-shadow", shadow);
-    cell.querySelector(".tile").animate([
+    // Hovering tiles keep their shadow while they wait; tiles dropping in from nowhere don't have one yet.
+    cell.style.setProperty("--land-fill", mine ? "both" : "forwards");
+    tile.animate([
       { transform: lift, opacity: mine ? 1 : 0, zIndex: 3 },
       { transform: "scale(0.94)", opacity: 1, zIndex: 3, offset: 0.7 },
       { transform: "none", zIndex: 3 },
-    ], { duration: 280, delay: i * 70, easing: "ease-in", fill: "backwards" });
-    setTimeout(() => sparks(r, c), i * 70 + 196);  // the moment it touches down (70% of the drop)
+    ], { duration: DROP_MS, delay: start, easing: "ease-in", fill: "backwards" });
+    sparkTimers.push(setTimeout(() => sparks(r, c), start + IMPACT_MS));
   });
-  // Pass & play holds the hand-off screen until the last tile is down, plus a beat to see it.
-  landingUntil = performance.now() + 280 + (sorted.length - 1) * 70 + 600;
+  return delay + sorted.length * DROP_MS;
+}
+
+// Turn history ↻: replay the drops of that play and every play after it, in order.
+function replayFrom(index) {
+  if (reduceMotion.matches) return;
+  sparkTimers.forEach(clearTimeout);
+  sparkTimers = [];
+  let t = 0;
+  for (const h of state.history.slice(index)) {
+    if (h.kind === "play" && h.cells?.length) t = dropTiles(h.cells, { delay: t }) + 150;
+  }
 }
 
 // A little burst of tick marks flying out from a tile's edges as it hits the board: three
@@ -287,14 +315,19 @@ function renderRack() {
   $("rack").classList.toggle("exchange-mode", exchangeMode);
 }
 
+const REPLAY_ICON = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.2 1.6v2.8H9.4"/></svg>`;
+
 function renderHistory() {
   const el = $("history");
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-  el.innerHTML = state.history.map((h) => {
+  el.innerHTML = state.history.map((h, i) => {
     const who = h.player ? `<b>${esc(h.player)}</b> ` : "";
     const score = h.kind === "play" || h.kind === "bonus" || h.kind === "penalty"
       ? `<span class="pts ${h.score < 0 ? "neg" : ""}">${h.score > 0 ? "+" : ""}${h.score}</span>` : "";
-    return `<li class="h-${h.kind}"><span>${who}${esc(h.text)}</span>${score}</li>`;
+    const replay = h.kind === "play" && h.cells?.length
+      ? `<button class="replay-btn" data-replay="${i}" title="Replay this turn and the ones after it" aria-label="Replay from this turn">${REPLAY_ICON}</button>` : "";
+    return `<li class="h-${h.kind}"><span>${who}${esc(h.text)}</span><span class="h-right">${replay}${score}</span></li>`;
   }).join("");
   if (atBottom) el.scrollTop = el.scrollHeight;
 }
@@ -581,6 +614,10 @@ document.addEventListener("pointermove", onPointerMove, { passive: false });
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", () => { if (drag?.ghost) { drag.ghost.remove(); drag.el.classList.remove("dragging"); } drag = null; });
 $("board").addEventListener("click", onBoardClick);
+$("history").addEventListener("click", (e) => {
+  const btn = e.target.closest(".replay-btn");
+  if (btn) replayFrom(Number(btn.dataset.replay));
+});
 
 $("shuffle-btn").onclick = shuffleRack;
 $("recall-btn").onclick = () => { exchangeMode = false; exchangeSel.clear(); recallAll(); };
