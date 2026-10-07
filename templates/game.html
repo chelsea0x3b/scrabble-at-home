@@ -66,7 +66,7 @@
     <aside class="panel words-panel">
       <h3>2-letter words</h3>
       <div class="two-letter">
-        {% for w in two_letter_words %}<span>{{ w }}</span>{% endfor %}
+        {% for w in two_letter_words %}<span>{% if loop.first or w[0] != loop.previtem[0] %}<b class="new-letter">{{ w[0] }}</b>{{ w[1:] }}{% else %}{{ w }}{% endif %}</span>{% endfor %}
       </div>
       <p class="muted small">Tiles left in bag: <b id="bag-count">–</b></p>
     </aside>

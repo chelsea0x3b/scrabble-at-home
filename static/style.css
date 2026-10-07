@@ -176,8 +176,10 @@ input {
 .two-letter { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 12px; }
 .two-letter span {
   font: 600 13px/1 ui-monospace, Menlo, monospace; text-align: center;
-  padding: 5px 0; background: var(--accent-soft); border-radius: 4px;
+  padding: 5px 0;
 }
+/* Purple highlight behind the first letter where it changes (AA, BA, DE...), so the list is easy to scan. */
+.two-letter .new-letter { font-weight: inherit; background: var(--accent); border-radius: 2px; padding: 1px 1px; }
 
 /* ---------- scores ---------- */
 .scores { display: flex; flex-direction: column; gap: 4px; }
