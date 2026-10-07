@@ -274,8 +274,9 @@ function replayFrom(index) {
   }
 }
 
-// A little burst of tick marks flying out from a tile's edges as it hits the board: three
-// along each side plus one off each corner, moving outward so they keep the tile's square shape.
+// A little burst of tick marks flying out from a tile's edges as it hits the board: three along
+// each side plus one off each corner. Each points away from the tile's centre, so they fan out
+// smoothly from straight-out at the middle of a side to diagonal at the corners.
 // They live on <body> so a board re-render mid-burst doesn't cut them off.
 function sparks(r, c) {
   const cell = $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
@@ -283,11 +284,11 @@ function sparks(r, c) {
   const box = cell.getBoundingClientRect();
   const size = box.width, h = size / 2;
   const len = size * 0.18, gap = size * 0.08, travel = size * 0.3;
-  const ticks = [];  // [x, y, angle] from the tile's centre; angle 0 points up
-  for (const o of [-h / 2, 0, h / 2]) ticks.push([o, -h, 0], [h, o, 90], [o, h, 180], [-h, o, 270]);
-  for (const [x, y, a] of [[h, -h, 45], [h, h, 135], [-h, h, 225], [-h, -h, 315]]) ticks.push([x, y, a]);
-  for (const [x, y, angle] of ticks) {
-    const diag = angle % 90 ? Math.SQRT2 : 1;  // corners travel diagonally to stay on the square
+  const ticks = [];  // [x, y] on the tile's edge, from its centre
+  for (const o of [-h / 2, 0, h / 2]) ticks.push([o, -h], [h, o], [o, h], [-h, o]);
+  for (const [x, y] of [[h, -h], [h, h], [-h, h], [-h, -h]]) ticks.push([x, y]);
+  for (const [x, y] of ticks) {
+    const angle = Math.atan2(x, -y) * 180 / Math.PI;  // 0 points up
     const el = document.createElement("div");
     el.className = "spark";
     el.style.left = box.left + h + "px";
@@ -296,7 +297,7 @@ function sparks(r, c) {
     el.style.height = len + "px";
     document.body.appendChild(el);
     const at = (dist, stretch) =>
-      `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${angle}deg) translateY(${-dist * diag}px) scaleY(${stretch})`;
+      `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${angle}deg) translateY(${-dist}px) scaleY(${stretch})`;
     el.animate([
       { transform: at(gap + len / 2, 1), opacity: 1 },
       { transform: at(gap + len / 2 + travel, 0.3), opacity: 0 },
