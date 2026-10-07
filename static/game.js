@@ -212,14 +212,16 @@ function renderBoard() {
 }
 
 // When a new play appears on the board, drop its tiles into place one at a time, each landing
-// before the next one falls. Your own tiles fall from their hover; anyone else's from higher up.
+// before the next one falls, then pop up its points word by word (see tallyPlay).
+// Your own tiles fall from their hover; anyone else's from higher up.
 const DROP_MS = 280;
 const IMPACT_MS = DROP_MS * 0.7;  // when a falling tile touches down
 let landedMove = null;
 let justSubmitted = false;
 let landingUntil = 0;
-let sparkTimers = [];
+let fxTimers = [];  // pending sparks and score steps, so a replay can cancel them
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const later = (ms, fn) => fxTimers.push(setTimeout(fn, ms));
 
 function landTiles() {
   const move = state.last_move || [];
@@ -230,19 +232,33 @@ function landTiles() {
   const mine = justSubmitted;
   justSubmitted = false;
   if (first || !move.length || reduceMotion.matches) return;
-  // Pass & play holds the hand-off screen until the last tile is down, plus a beat to see it.
-  landingUntil = performance.now() + dropTiles(move, { mine }) + 600;
+  const play = [...state.history].reverse().find((h) => h.kind === "play");
+  // Pass & play holds the hand-off screen until the last points have popped up and faded.
+  landingUntil = performance.now() + animatePlay(play && JSON.stringify(play.cells) === key ? play : { cells: move }, { mine }) + 200;
+}
+
+// Drops a play's tiles and tallies its score, starting after `delay` ms.
+// Returns when (ms from now) the whole thing is over.
+function animatePlay(play, { mine = false, delay = 0 } = {}) {
+  const impacts = dropTiles(play.cells, { mine, delay });
+  const landed = delay + play.cells.length * DROP_MS;
+  if (play.words?.length && play.words.every((w) => w.cells)) return tallyPlay(play, impacts, landed);
+  if (typeof play.score !== "number") return landed;
+  // Older history entries don't say which squares each word used: just pop the total.
+  later(landed, () => fadeLater(chip("+" + play.score, ...aboveWord(play.cells))));
+  return landed + STEP_MS;
 }
 
 // Drops the tiles on these cells in reading order, starting after `delay` ms.
-// Returns when (ms from now) the last one has landed.
+// Returns when each one touches down, as "r,c" -> ms from now.
 function dropTiles(cells, { mine = false, delay = 0 } = {}) {
   const lift = mine ? "translateY(-3px) scale(1.06)" : "translateY(-14px) scale(1.25)";
   const shadow = mine ? "0 5px 8px rgba(46, 31, 82, .35)" : "0 12px 14px rgba(46, 31, 82, .3)";
-  const sorted = [...cells].sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
-  sorted.forEach(([r, c], i) => {
+  const impacts = new Map();
+  [...cells].sort((a, b) => a[0] + a[1] - (b[0] + b[1])).forEach(([r, c], i) => {
     const start = delay + i * DROP_MS;
-    const cell = $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    impacts.set(`${r},${c}`, start + IMPACT_MS);
+    const cell = cellEl(r, c);
     const tile = cell.querySelector(".tile");
     if (!tile) return;
     tile.getAnimations().forEach((a) => a.cancel());
@@ -258,20 +274,136 @@ function dropTiles(cells, { mine = false, delay = 0 } = {}) {
       { transform: "scale(0.94)", opacity: 1, zIndex: 3, offset: 0.7 },
       { transform: "none", zIndex: 3 },
     ], { duration: DROP_MS, delay: start, easing: "ease-in", fill: "backwards" });
-    sparkTimers.push(setTimeout(() => sparks(r, c), start + IMPACT_MS));
+    later(start + IMPACT_MS, () => sparks(r, c));
   });
-  return delay + sorted.length * DROP_MS;
+  return impacts;
 }
 
-// Turn history ↻: replay the drops of that play and every play after it, in order.
+// Turn history ↻: replay that play and every play after it, in order.
 function replayFrom(index) {
   if (reduceMotion.matches) return;
-  sparkTimers.forEach(clearTimeout);
-  sparkTimers = [];
+  fxTimers.forEach(clearTimeout);
+  fxTimers = [];
+  document.querySelectorAll(".fx").forEach((el) => el.remove());
   let t = 0;
   for (const h of state.history.slice(index)) {
-    if (h.kind === "play" && h.cells?.length) t = dropTiles(h.cells, { delay: t }) + 150;
+    if (h.kind === "play" && h.cells?.length) t = animatePlay(h, { delay: t }) + 150;
   }
+}
+
+// ---------- score pop-ups ----------
+// Points pop up as plain chips: each new letter as it lands (DL/TL already applied), then the
+// letters already on the board, then "×2"/"×3" on each word-multiplier square. Each side word is
+// then scored in turn: its letters pop together, then its own "×2" if it crosses one. A
+// square's word multiplier counts for every word through it. A bingo adds "+50" at the end.
+
+const STEP_MS = 650;      // each scoring step after the tiles are down
+const CHIP_SCALE = 0.36;  // chip text height, in tiles
+
+function wordBreakdown(word, newKeys) {
+  const letters = word.cells.map(([r, c]) => {
+    const tile = state.board[r][c];
+    const isNew = newKeys.has(`${r},${c}`);
+    const prem = isNew ? window.PREMIUMS[r][c] : null;
+    const base = tile && !tile.b ? window.LETTER_VALUES[tile.l] ?? 0 : 0;
+    return { r, c, isNew, prem, value: base * (prem === "TL" ? 3 : prem === "DL" ? 2 : 1) };
+  });
+  const mult = letters.reduce((m, l) => m * wordMult(l.prem), 1);
+  return { letters, mult, sum: letters.reduce((a, l) => a + l.value, 0) };
+}
+
+const wordMult = (prem) => (prem === "TW" ? 3 : prem === "DW" || prem === "ST" ? 2 : 1);
+
+// Schedules the pop-ups for a play whose tiles touch down at `impacts`; returns when they end.
+function tallyPlay(play, impacts, landed) {
+  const newKeys = new Set(play.cells.map(([r, c]) => `${r},${c}`));
+  const [main, ...sides] = play.words.map((w) => ({ ...w, ...wordBreakdown(w, newKeys) }));
+  for (const l of main.letters) if (l.isNew) later(impacts.get(`${l.r},${l.c}`), () => letterPop(l));
+  let t = landed + 150;
+  const old = main.letters.filter((l) => !l.isNew);
+  if (old.length) {
+    later(t, () => old.forEach((l) => { pulseTile(l); letterPop(l); }));
+    t += STEP_MS;
+  }
+  if (main.mult > 1) {
+    later(t, () => multPops(main));
+    t += STEP_MS;
+  }
+  for (const w of sides) {
+    later(t, () => sideWord(w));
+    t += STEP_MS + (w.mult > 1 ? 300 : 0);
+  }
+  if (play.cells.length === 7) {
+    later(t, () => fadeLater(chip("+50 BINGO!", ...aboveWord(main.cells))));
+    t += STEP_MS;
+  }
+  return t;
+}
+
+// A side word: pop all its letters, then stamp its multiplier if it has one.
+function sideWord(w) {
+  w.letters.forEach((l) => { pulseTile(l); letterPop(l); });
+  if (w.mult > 1) later(300, () => multPops(w));
+}
+
+// The letter's points pop up on its tile and drift a little way up as they fade.
+function letterPop(l) {
+  const box = cellEl(l.r, l.c).getBoundingClientRect();
+  const el = chip("+" + l.value, box.left + box.width / 2, box.top + box.height * 0.35, box.width);
+  el.animate([
+    { translate: "0 0", opacity: 1 },
+    { translate: "0 -40%", opacity: 1, offset: 0.6 },
+    { translate: "0 -70%", opacity: 0 },
+  ], { duration: STEP_MS, easing: "ease-out" }).onfinish = () => el.remove();
+}
+
+// "×2" / "×3" stamps down on each new tile sitting on a word-multiplier square.
+function multPops(word) {
+  for (const l of word.letters) {
+    if (wordMult(l.prem) === 1) continue;
+    const box = cellEl(l.r, l.c).getBoundingClientRect();
+    const el = chip("×" + wordMult(l.prem), box.left + box.width / 2, box.top + box.height / 2, box.width);
+    el.animate([{ scale: 2.2, opacity: 0 }, { scale: 0.9, opacity: 1, offset: 0.6 }, { scale: 1, opacity: 1 }], { duration: 220, easing: "ease-in" });
+    fadeLater(el);
+  }
+}
+
+function pulseTile(l) {
+  cellEl(l.r, l.c).querySelector(".tile")?.animate([{ scale: 1 }, { scale: 1.15 }, { scale: 1 }], { duration: 260, easing: "ease-out" });
+}
+
+const cellEl = (r, c) => $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+
+function wordBox(cells) {
+  const boxes = cells.map(([r, c]) => cellEl(r, c).getBoundingClientRect());
+  const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+  const right = Math.max(...boxes.map((b) => b.right)), bottom = Math.max(...boxes.map((b) => b.bottom));
+  return { left, top, right, bottom, width: right - left, height: bottom - top, size: boxes[0].width };
+}
+
+// Centred just above the word. Returns [x, y, tile size].
+function aboveWord(cells) {
+  const box = wordBox(cells);
+  return [box.left + box.width / 2, box.top - box.size * 0.45, box.size];
+}
+
+// A points chip centred on (x, y), sized for tiles `size` px across.
+// It lives on <body> so a board re-render doesn't cut it off.
+function chip(text, x, y, size) {
+  const el = document.createElement("div");
+  el.className = "fx chip";
+  el.textContent = text;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.style.fontSize = size * CHIP_SCALE + "px";
+  document.body.appendChild(el);
+  el.animate([{ scale: 0.4, opacity: 0 }, { scale: 1.1, opacity: 1, offset: 0.7 }, { scale: 1, opacity: 1 }], { duration: 200, easing: "ease-out" });
+  return el;
+}
+
+// Fades an fx element out at the end of a scoring step.
+function fadeLater(el) {
+  later(STEP_MS, () => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: "forwards" }).onfinish = () => el.remove());
 }
 
 // A little burst of tick marks flying out from a tile's edges as it hits the board: three along

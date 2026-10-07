@@ -281,6 +281,15 @@ input {
 }
 /* Sparks that fly off a tile as it lands (see sparks in game.js). */
 .spark { position: fixed; z-index: 50; pointer-events: none; border-radius: 999px; background: var(--text); }
+/* Points popping up over the board after a play lands (see tallyPlay in game.js). */
+.fx {
+  position: fixed; z-index: 60; pointer-events: none; white-space: nowrap;
+  transform: translate(-50%, -50%); font-weight: 800; line-height: 1;
+}
+.fx.chip {
+  padding: .15em .4em; border-radius: 999px;
+  background: var(--card); color: var(--text); box-shadow: 0 2px 6px rgba(46, 31, 82, .3);
+}
 @media (prefers-reduced-motion: reduce) { .board .tile.pending { animation: none; } }
 /* Valid = solid blue, invalid = dashed orange, last play = solid dark: distinguishable without relying on red vs green. */
 .board .tile.pending.invalid { outline: 3px dashed var(--word-bad); outline-offset: 1px; }

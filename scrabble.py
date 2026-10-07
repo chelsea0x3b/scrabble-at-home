@@ -360,7 +360,7 @@ class Game:
             text += " (" + ", ".join(w["word"] for w in result["words"][1:]) + ")"
         if result["bingo"]:
             text += " — BINGO!"
-        words = [{"word": w["word"], "score": w["score"]} for w in result["words"]]
+        words = [{"word": w["word"], "score": w["score"], "cells": w["cells"]} for w in result["words"]]
         self.log(name, "play", text, result["score"], words, self.last_move)
 
         if not p["rack"] and not self.bag:
