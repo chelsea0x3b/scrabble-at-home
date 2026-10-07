@@ -160,8 +160,19 @@ function renderBanner() {
 }
 
 // Pass & play: cover the board between turns so nobody sees the next player's tiles.
+let handoffTimer = null;
+
 function renderHandoff() {
   const show = state.local && state.status === "active" && isPlayer() && revealedAt !== state.history.length;
+  clearTimeout(handoffTimer);
+  const wait = landingUntil - performance.now();
+  // The rack already holds the next player's tiles, so keep it out of sight while the play lands.
+  document.querySelector(".rack-area").style.visibility = show && wait > 0 ? "hidden" : "";
+  if (show && wait > 0) {
+    $("handoff-modal").hidden = true;
+    handoffTimer = setTimeout(renderHandoff, wait);
+    return;
+  }
   $("handoff-modal").hidden = !show;
   if (!show) return;
   $("handoff-name").textContent = state.players[state.turn_index].name;
@@ -191,11 +202,47 @@ function renderBoard() {
       if (cell) inner = tileHTML(cell.l, { blank: cell.b });
       else if (p) inner = tileHTML(p.letter, { blank: p.blank, extra: "pending draggable " + validityClass(), id: p.id });
       else if (prem) inner = `<span class="prem-label">${prem === "ST" ? "★" : prem}</span>`;
-      html += `<div class="cell ${prem ? "p-" + prem : ""}" data-r="${r}" data-c="${c}" title="${cell || p ? "" : PREMIUM_LABELS[prem] || ""}">${inner}</div>`;
+      html += `<div class="cell ${prem ? "p-" + prem : ""} ${!cell && p ? "lifted" : ""}" data-r="${r}" data-c="${c}" title="${cell || p ? "" : PREMIUM_LABELS[prem] || ""}">${inner}</div>`;
     }
   }
   $("board").innerHTML = html;
+  $("board").style.setProperty("--bob-phase", `-${Math.round(performance.now() % 2400)}ms`);
   renderFrames();
+  landTiles();
+}
+
+// When a new play appears on the board, drop its tiles into place one after another.
+// Your own tiles fall from their hover; anyone else's fall from a little higher up.
+let landedMove = null;
+let justSubmitted = false;
+let landingUntil = 0;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+function landTiles() {
+  const move = state.last_move || [];
+  const key = JSON.stringify(move);
+  const first = landedMove === null;
+  if (key === landedMove) return;
+  landedMove = key;
+  const mine = justSubmitted;
+  justSubmitted = false;
+  if (first || !move.length || reduceMotion.matches) return;
+  const lift = mine ? "translateY(-3px) scale(1.06)" : "translateY(-14px) scale(1.25)";
+  const shadow = mine ? "0 5px 8px rgba(46, 31, 82, .35)" : "0 12px 14px rgba(46, 31, 82, .3)";
+  const sorted = [...move].sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
+  sorted.forEach(([r, c], i) => {
+    const cell = $("board").querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    cell.classList.add("landing");
+    cell.style.setProperty("--land-delay", `${i * 70}ms`);
+    cell.style.setProperty("--land-shadow", shadow);
+    cell.querySelector(".tile").animate([
+      { transform: lift, opacity: mine ? 1 : 0, zIndex: 3 },
+      { transform: "scale(0.94)", opacity: 1, zIndex: 3, offset: 0.7 },
+      { transform: "none", zIndex: 3 },
+    ], { duration: 280, delay: i * 70, easing: "ease-in", fill: "backwards" });
+  });
+  // Pass & play holds the hand-off screen until the last tile is down, plus a beat to see it.
+  landingUntil = performance.now() + 280 + (sorted.length - 1) * 70 + 600;
 }
 
 function renderRack() {
@@ -395,7 +442,7 @@ async function act(action, body, confirmMsg) {
   render();
   try {
     const data = await api(gameUrl(action), body || {});
-    if (action === "play") placed.clear();
+    if (action === "play") { placed.clear(); justSubmitted = true; }
     if (action === "exchange") { exchangeMode = false; exchangeSel.clear(); }
     busy = false;
     applyState(data);

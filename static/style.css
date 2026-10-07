@@ -251,8 +251,28 @@ input {
 /* Tiles on the board lie flat; only rack tiles get depth. */
 .board .tile { box-shadow: none; border-radius: 3px; }
 .board .tile.pending { background: var(--pending); box-shadow: inset 0 0 0 1px #d2b23c; }
+/* Tentative tiles hover above the board until the play is submitted, then land (see landTiles in game.js).
+   --bob-phase keeps the bob in step across re-renders. */
+.board .tile.pending {
+  z-index: 3;
+  transform: translateY(-3px) scale(1.06);
+  animation: hover-bob 2.4s ease-in-out infinite;
+  animation-delay: var(--bob-phase, 0s);
+}
+@keyframes hover-bob {
+  0%, 100% { transform: translateY(-3px) scale(1.06); }
+  50% { transform: translateY(-5px) scale(1.06); }
+}
+/* The shadow belongs to the cell, one layer below every hovering tile, so it never falls across a neighbour. */
+.cell.lifted::after, .cell.landing::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  border-radius: 3px; box-shadow: var(--land-shadow, 0 5px 8px rgba(46, 31, 82, .35));
+}
+.cell.landing::after { animation: land-shadow 280ms ease-in var(--land-delay, 0s) both; }
+@keyframes land-shadow { 70%, 100% { box-shadow: 0 0 0 rgba(46, 31, 82, 0); } }
+@media (prefers-reduced-motion: reduce) { .board .tile.pending { animation: none; } }
 /* Valid = solid blue, invalid = dashed orange, last play = solid dark: distinguishable without relying on red vs green. */
-.board .tile.pending.invalid { outline: 3px dashed var(--word-bad); outline-offset: 1px; position: relative; z-index: 1; }
+.board .tile.pending.invalid { outline: 3px dashed var(--word-bad); outline-offset: 1px; }
 /* Sits just outside the word's tiles (covering the edges of neighbouring squares). */
 .word-frame {
   position: absolute; inset: -5px; z-index: 2; pointer-events: none;
