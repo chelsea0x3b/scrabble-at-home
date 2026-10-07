@@ -14,25 +14,12 @@
 
   <main class="lobby">
     <section class="card">
-      <h2>Start a new game</h2>
-      <form id="new-game">
-        <div class="row">
-          <input id="game-name" maxlength="40" placeholder="Game name (optional)">
-          <button class="btn primary" type="submit">New game</button>
-        </div>
-        <label class="check"><input id="local-toggle" type="checkbox"> Pass &amp; play on this device</label>
-        <div id="local-names" class="local-names" hidden>
-          <input class="player-name" maxlength="20" placeholder="Player 1" value="{{ user }}">
-          <input class="player-name" maxlength="20" placeholder="Player 2">
-          <input class="player-name" maxlength="20" placeholder="Player 3 (optional)">
-          <input class="player-name" maxlength="20" placeholder="Player 4 (optional)">
-        </div>
-      </form>
-    </section>
-
-    <section class="card">
       <h2>Games</h2>
       <div id="games"><p class="muted">Loading…</p></div>
+      <div class="row new-game-row">
+        <button id="new-game" class="btn primary">New game</button>
+        <button id="new-local" class="btn" title="Play on this device, passing it between turns">New pass &amp; play</button>
+      </div>
     </section>
   </main>
 

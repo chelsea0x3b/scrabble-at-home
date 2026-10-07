@@ -50,8 +50,15 @@ async function poll() {
   }
 }
 
+let autoJoined = false;
+
 function applyState(data) {
   state = data;
+  // Opening a game you're not in joins it, if there's a seat.
+  if (!autoJoined && state.status === "pending" && !isPlayer() && state.players.length < 4) {
+    autoJoined = true;
+    act("join");
+  }
   syncRack(data.rack);
   // Drop any tentative tiles whose squares were just taken by someone else.
   for (const [key, t] of placed) {
@@ -90,22 +97,23 @@ function render() {
 
 function renderPending() {
   const me = state.players.find((p) => p.name === window.ME);
+  const host = state.creator === window.ME;
+  const enough = state.players.length >= 2;
   $("pending-players").innerHTML = state.players.map((p) => `
-    <li class="${p.ready ? "ready" : ""}">
-      <span>${esc(p.name)}${p.name === state.creator ? ' <span class="muted small">(host)</span>' : ""}</span>
-      <span class="${p.ready ? "ok" : "muted"}">${p.ready ? "✔ Ready" : "Not ready"}</span>
+    <li>
+      <span>${esc(p.name)}${p.name === window.ME ? " (you)" : ""}</span>
+      ${p.name === state.creator ? '<span class="muted small">host</span>' : ""}
     </li>`).join("") + (state.players.length < 4 ? `<li class="muted empty-slot">${4 - state.players.length} open seat${state.players.length === 3 ? "" : "s"}</li>` : "");
 
   $("join-btn").hidden = !!me || state.players.length >= 4;
-  $("ready-btn").hidden = !me;
-  $("ready-btn").textContent = me && me.ready ? "Not ready" : "I'm ready";
-  $("ready-btn").classList.toggle("primary", !(me && me.ready));
+  $("start-btn").hidden = !host;
+  $("start-btn").disabled = !enough || busy;
   $("leave-btn").hidden = !me;
 
   let msg = "";
-  if (state.players.length < 2) msg = "Need at least 2 players to start.";
-  else if (state.players.every((p) => p.ready)) msg = "Starting…";
-  else msg = "Game starts once everyone is ready.";
+  if (!enough) msg = "Waiting for at least one more player to join…";
+  else if (host) msg = "Start the game when everyone's here.";
+  else if (me) msg = `Waiting for ${state.creator} to start the game…`;
   $("pending-msg").textContent = msg;
 }
 
@@ -514,10 +522,7 @@ $("handoff-btn").onclick = () => {
 
 $("join-btn").onclick = () => act("join");
 $("leave-btn").onclick = () => act("leave").then(() => { location.href = "/"; });
-$("ready-btn").onclick = () => {
-  const me = state.players.find((p) => p.name === window.ME);
-  act("ready", { ready: !(me && me.ready) });
-};
+$("start-btn").onclick = () => act("start");
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { selectedId = null; if (state) render(); }

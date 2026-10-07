@@ -123,17 +123,17 @@ def list_games():
 @app.route("/api/games", methods=["POST"])
 @login_required(api=True)
 def create_game():
+    """Games are named after their creator. Pass and play defaults to you plus "<you>'s Friend"."""
     body = request.get_json(silent=True) or {}
-    name = " ".join(str(body.get("name", "")).split())[:40]
     user = current_user()
     local_players = None
     if body.get("local"):
         local_players = [" ".join(str(n).split()) for n in body.get("players", [])]
-        local_players = [n for n in local_players if n]
-        if any(len(n) > 20 for n in local_players):
-            raise GameError("Player names can be at most 20 characters.")
+        local_players = [n for n in local_players if n] or [user, f"{user}'s Friend"]
+        if any(len(n) > 30 for n in local_players):
+            raise GameError("Player names can be at most 30 characters.")
     with lock:
-        game = Game(name or f"{user}'s game", user, local_players)
+        game = Game(f"{user}'s game", user, local_players)
         games[game.id] = game
     return jsonify({"id": game.id})
 
@@ -177,11 +177,17 @@ def route(path, fn):
 
 
 route("/api/games/<game_id>/join", lambda g, u, b: g.add_player(u))
-route("/api/games/<game_id>/leave", lambda g, u, b: g.remove_player(u))
-route("/api/games/<game_id>/ready", lambda g, u, b: g.set_ready(u, b.get("ready", True)))
+route("/api/games/<game_id>/leave", lambda g, u, b: leave(g, u))
+route("/api/games/<game_id>/start", lambda g, u, b: g.start_game(u))
 route("/api/games/<game_id>/play", lambda g, u, b: g.play(u, parse_placements(b), dictionary))
 route("/api/games/<game_id>/exchange", lambda g, u, b: g.exchange(u, list(b.get("tiles", []))))
 route("/api/games/<game_id>/pass", lambda g, u, b: g.pass_turn(u))
+
+
+def leave(game, user):
+    game.remove_player(user)
+    if not game.players:
+        games.pop(game.id, None)  # nobody left to play it
 
 
 def parse_placements(body):

@@ -34,33 +34,32 @@ async function loadGames() {
     else if (g.status === "active" && g.local) action = g.creator === me ? "Play" : "View";
     else if (g.status === "active" && mine) action = g.turn === me ? "Your turn!" : "Play";
     const detail = (g.local ? " · Pass & play" : "") + (g.status === "active" ? ` · ${esc(g.turn)}'s turn` : "");
+    const people = g.players.map((p) =>
+      `<span class="player-chip ${p === me ? "me" : ""}">${esc(p)}</span>`
+    ).join("");
     return `
       <a class="game-row ${g.status}" href="/game/${encodeURIComponent(g.id)}">
         <div>
           <div class="game-name">${esc(g.name)}</div>
-          <div class="muted small">${STATUS_LABELS[g.status]}${detail} · ${g.players.map(esc).join(", ") || "no players"}</div>
+          <div class="muted small">${STATUS_LABELS[g.status]}${detail}</div>
+          <div class="player-chips">${people}</div>
         </div>
         <span class="btn ${action === "Your turn!" || action === "Join" ? "primary" : ""}">${action}</span>
       </a>`;
   }).join("");
 }
 
-document.getElementById("new-game").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = document.getElementById("game-name").value;
-  const local = document.getElementById("local-toggle").checked;
-  const players = [...document.querySelectorAll(".player-name")].map((el) => el.value.trim()).filter(Boolean);
+async function newGame(body) {
   try {
-    const { id } = await api("/api/games", local ? { name, local, players } : { name });
+    const { id } = await api("/api/games", body);
     location.href = `/game/${encodeURIComponent(id)}`;
   } catch (err) {
     alert(err.message);
   }
-});
+}
 
-document.getElementById("local-toggle").addEventListener("change", (e) => {
-  document.getElementById("local-names").hidden = !e.target.checked;
-});
+document.getElementById("new-game").addEventListener("click", () => newGame({}));
+document.getElementById("new-local").addEventListener("click", () => newGame({ local: true }));
 
 loadGames();
 setInterval(() => loadGames().catch(() => {}), 4000);

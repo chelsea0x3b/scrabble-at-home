@@ -194,7 +194,7 @@ class Game:
         self.creator = creator
         self.created_at = time.time()
         self.status = "pending"  # pending -> active -> finished
-        self.players = []  # list of {"name", "ready", "score", "rack"}
+        self.players = []  # list of {"name", "score", "rack"}
         self.board = [[None] * SIZE for _ in range(SIZE)]
         self.bag = []
         self.turn = 0
@@ -233,27 +233,31 @@ class Game:
             return
         if len(self.players) >= MAX_PLAYERS:
             raise GameError("This game is full.")
-        self.players.append({"name": name, "ready": False, "score": 0, "rack": []})
+        self.players.append({"name": name, "score": 0, "rack": []})
         self.touch()
 
     def remove_player(self, name):
         if self.status != "pending":
             raise GameError("You can't leave a game that has started.")
         i, _ = self.player(name)
-        if i is not None:
-            self.players.pop(i)
-            self.touch()
+        if i is None:
+            return
+        self.players.pop(i)
+        if name == self.creator and self.players:
+            # The next player becomes host, so someone can still start the game.
+            self.creator = self.players[0]["name"]
+            self.name = f"{self.creator}'s game"
+        self.touch()
 
-    def set_ready(self, name, ready):
+    def start_game(self, name):
+        """The host starts the game once at least two players have joined."""
         if self.status != "pending":
             raise GameError("This game has already started.")
-        _, p = self.player(name)
-        if not p:
-            raise GameError("You're not in this game.")
-        p["ready"] = bool(ready)
-        self.touch()
-        if len(self.players) >= MIN_PLAYERS and all(pl["ready"] for pl in self.players):
-            self.start()
+        if name != self.creator:
+            raise GameError("Only the host can start the game.")
+        if len(self.players) < MIN_PLAYERS:
+            raise GameError(f"You need at least {MIN_PLAYERS} players to start.")
+        self.start()
 
     def start(self):
         self.status = "active"
@@ -407,7 +411,7 @@ class Game:
             "my_index": idx,
             "rack": me["rack"] if me else [],
             "players": [
-                {"name": p["name"], "ready": p["ready"], "score": p["score"], "tiles": len(p["rack"])}
+                {"name": p["name"], "score": p["score"], "tiles": len(p["rack"])}
                 for p in self.players
             ],
             "turn_index": self.turn,

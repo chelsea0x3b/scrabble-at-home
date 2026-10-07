@@ -17,8 +17,7 @@ def started_game(*names):
     game = Game("test", names[0])
     for n in names[1:]:
         game.add_player(n)
-    for n in names:
-        game.set_ready(n, True)
+    game.start_game(names[0])
     # Deterministic: undo the random seating so players play in the order listed.
     game.players.sort(key=lambda p: names.index(p["name"]))
     game.turn = 0
@@ -26,16 +25,28 @@ def started_game(*names):
 
 
 class LobbyFlow(unittest.TestCase):
-    def test_starts_only_when_two_or_more_players_all_ready(self):
+    def test_host_starts_once_two_players_have_joined(self):
         game = Game("t", "A")
-        game.set_ready("A", True)
-        self.assertEqual(game.status, "pending", "one player can't start a game")
+        with self.assertRaises(GameError, msg="one player can't start a game"):
+            game.start_game("A")
         game.add_player("B")
+        with self.assertRaises(GameError, msg="only the host can start"):
+            game.start_game("B")
         self.assertEqual(game.status, "pending")
-        game.set_ready("B", True)
+        game.start_game("A")
         self.assertEqual(game.status, "active")
         self.assertEqual([len(p["rack"]) for p in game.players], [7, 7])
         self.assertEqual(len(game.bag), 100 - 14)
+
+    def test_host_leaving_hands_the_game_to_the_next_player(self):
+        game = Game("Ann's game", "Ann")
+        game.add_player("Bob")
+        game.add_player("Cy")
+        game.remove_player("Ann")
+        self.assertEqual(game.creator, "Bob")
+        self.assertEqual(game.name, "Bob's game")
+        game.start_game("Bob")
+        self.assertEqual(game.status, "active")
 
     def test_turn_order_is_shuffled_at_start(self):
         orders = set()
@@ -221,6 +232,12 @@ class PassAndPlay(unittest.TestCase):
         self.assertEqual(game.status, "active")
         self.assertEqual(sorted(p["name"] for p in game.players), ["Dad", "Mom"])
 
+    def test_defaults_to_you_and_a_friend(self):
+        game_id = self.client.post("/api/games", json={"local": True}).get_json()["id"]
+        game = server.games[game_id]
+        self.assertEqual(game.name, "Host's game")
+        self.assertEqual(sorted(p["name"] for p in game.players), ["Host", "Host's Friend"])
+
     def test_creator_sees_and_plays_the_current_players_rack(self):
         game = server.games[self.create(["Mom", "Dad"]).get_json()["id"]]
         game.turn = 0
@@ -243,11 +260,17 @@ class PassAndPlay(unittest.TestCase):
         res = other.post(f"/api/games/{game.id}/pass", json={})
         self.assertEqual(res.status_code, 400)
 
+    def test_last_player_leaving_removes_a_waiting_game(self):
+        game_id = self.client.post("/api/games", json={}).get_json()["id"]
+        self.assertIn(game_id, server.games)
+        self.client.post(f"/api/games/{game_id}/leave", json={})
+        self.assertNotIn(game_id, server.games)
+
     def test_rejects_bad_player_lists(self):
         self.assertIn("2 to 4", self.create(["Solo"]).get_json()["error"])
         self.assertIn("2 to 4", self.create(list("ABCDE")).get_json()["error"])
         self.assertIn("different", self.create(["Mom", "Mom"]).get_json()["error"])
-        self.assertIn("20", self.create(["Mom", "x" * 21]).get_json()["error"])
+        self.assertIn("30", self.create(["Mom", "x" * 31]).get_json()["error"])
 
 
 if __name__ == "__main__":
