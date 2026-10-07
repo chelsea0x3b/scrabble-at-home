@@ -2,6 +2,8 @@
 
 A small self-hosted Scrabble site for 2–4 players. Python 3 + Flask, plain HTML/JS/CSS.
 
+![preview](assets/preview.png)
+
 ## Run it
 
 ```bash
