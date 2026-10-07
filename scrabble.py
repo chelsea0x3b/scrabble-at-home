@@ -260,8 +260,10 @@ class Game:
         self.bag = new_bag()
         for p in self.players:
             p["rack"] = self.draw(RACK_SIZE)
-        self.turn = random.randrange(len(self.players))
-        self.log(None, "start", f"Game started. {self.players[self.turn]['name']} goes first!")
+        random.shuffle(self.players)  # random turn order; the first in the list goes first
+        self.turn = 0
+        order = " → ".join(p["name"] for p in self.players)
+        self.log(None, "start", f"Game started. Turn order: {order}. {self.players[0]['name']} goes first!")
         self.touch()
 
     # ---- play ----

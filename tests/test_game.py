@@ -19,7 +19,9 @@ def started_game(*names):
         game.add_player(n)
     for n in names:
         game.set_ready(n, True)
-    game.turn = 0  # deterministic: first player listed goes first
+    # Deterministic: undo the random seating so players play in the order listed.
+    game.players.sort(key=lambda p: names.index(p["name"]))
+    game.turn = 0
     return game
 
 
@@ -34,6 +36,14 @@ class LobbyFlow(unittest.TestCase):
         self.assertEqual(game.status, "active")
         self.assertEqual([len(p["rack"]) for p in game.players], [7, 7])
         self.assertEqual(len(game.bag), 100 - 14)
+
+    def test_turn_order_is_shuffled_at_start(self):
+        orders = set()
+        for _ in range(200):
+            game = Game("t", "A", ["A", "B", "C"])
+            orders.add(tuple(p["name"] for p in game.players))
+            self.assertEqual(game.turn, 0, "the first seat after shuffling goes first")
+        self.assertEqual(len(orders), 6, "all 3! orders should come up")
 
     def test_max_four_players(self):
         game = Game("t", "A")
@@ -209,7 +219,7 @@ class PassAndPlay(unittest.TestCase):
         game = server.games[game_id]
         self.assertTrue(game.local)
         self.assertEqual(game.status, "active")
-        self.assertEqual([p["name"] for p in game.players], ["Mom", "Dad"])
+        self.assertEqual(sorted(p["name"] for p in game.players), ["Dad", "Mom"])
 
     def test_creator_sees_and_plays_the_current_players_rack(self):
         game = server.games[self.create(["Mom", "Dad"]).get_json()["id"]]

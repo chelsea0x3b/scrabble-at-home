@@ -325,7 +325,7 @@ function schedulePreview() {
   clearTimeout(previewTimer);
   setPreview(null);
   if (!state || state.status !== "active" || !placed.size) {
-    if (state && state.status === "active" && !exchangeMode) setStatus(isMyTurn() ? "Place tiles on the board, then Submit." : `Waiting for ${state.players[state.turn_index].name}…`);
+    if (state && state.status === "active" && !exchangeMode) setStatus(isMyTurn() ? "" : `Waiting for ${state.players[state.turn_index].name}…`);
     return;
   }
   previewTimer = setTimeout(async () => {
