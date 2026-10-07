@@ -246,7 +246,9 @@ input {
 .tile .letter { font-weight: 700; font-size: calc(var(--board-size) / 15 * .55); line-height: 1; }
 .tile .value { position: absolute; right: 8%; bottom: 4%; font-size: calc(var(--board-size) / 15 * .26); font-weight: 600; }
 .tile.blank .letter { color: #b0582a; }
-.board .tile.pending { background: var(--pending); box-shadow: inset 0 -2px 0 #d2b23c, 0 0 0 2px var(--accent-strong); }
+/* Tiles on the board lie flat; only rack tiles get depth. */
+.board .tile { box-shadow: none; border-radius: 3px; }
+.board .tile.pending { background: var(--pending); box-shadow: inset 0 0 0 1px #d2b23c; }
 /* Valid = solid blue, invalid = dashed orange, last play = solid dark: distinguishable without relying on red vs green. */
 .board .tile.pending.invalid { outline: 3px dashed var(--word-bad); outline-offset: 1px; position: relative; z-index: 1; }
 /* Sits just outside the word's tiles (covering the edges of neighbouring squares). */
