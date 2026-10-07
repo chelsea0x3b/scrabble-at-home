@@ -28,7 +28,7 @@
   --word-ok: #0072b2;
   --word-bad: #d55e00;
   --left-w: 360px;
-  --right-w: clamp(180px, 14vw, 220px);
+  --right-w: 220px;
   /* Wide screens: the board gets the whole middle column, as tall as the window allows
      (80px for the top bar and padding) and as wide as the two side columns leave. */
   --board-size: max(320px, min(calc(100vh - 80px), calc(100vw - var(--left-w) - var(--right-w) - 72px)));
@@ -173,7 +173,8 @@ input {
 .pts { font-weight: 700; color: var(--accent-strong); white-space: nowrap; }
 .pts.neg { color: var(--danger); }
 
-.two-letter { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 12px; }
+/* Fixed-width columns so the spacing doesn't change with the window (6 × 32px + gaps fits the 220px panel). */
+.two-letter { display: grid; grid-template-columns: repeat(6, 32px); gap: 4px; justify-content: start; margin-bottom: 12px; }
 .two-letter span {
   font: 600 13px/1 ui-monospace, Menlo, monospace; text-align: center;
   padding: 5px 0;
@@ -345,7 +346,7 @@ input {
   .history-panel { order: 3; }
   .words-panel { order: 4; }
   #history { max-height: 260px; }
-  .two-letter { grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); }
+  .two-letter { grid-template-columns: repeat(auto-fill, 32px); }
 }
 @media (max-width: 600px) {
   .play { padding: 8px 16px; gap: 12px; }
