@@ -8,7 +8,6 @@ Usage:
 
 import argparse
 import getpass
-import hashlib
 import hmac
 import secrets
 import socket
@@ -33,14 +32,7 @@ dictionary = None
 
 # ---------- auth ----------
 
-def password_fingerprint():
-    # Stored in the session so changing the password on restart logs everyone out.
-    return hashlib.sha256(("pw:" + app.config["PASSWORD"]).encode()).hexdigest()[:16]
-
-
 def current_user():
-    if session.get("pw") != password_fingerprint():
-        return None
     return session.get("user")
 
 
@@ -72,7 +64,6 @@ def login():
             session.clear()
             session.permanent = True
             session["user"] = username
-            session["pw"] = password_fingerprint()
             nxt = request.args.get("next", "")
             return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("lobby"))
     return render_template("login.html", error=error, username=username)
@@ -208,19 +199,6 @@ def preview(game_id):
         })
     except GameError as e:
         return jsonify({"ok": False, "error": str(e)})
-
-
-@app.route("/api/games/<game_id>/delete", methods=["POST"])
-@login_required(api=True)
-def delete_game(game_id):
-    with lock:
-        game = get_game(game_id)
-        if game.creator != current_user():
-            raise GameError("Only the person who created the game can delete it.")
-        if game.status == "active":
-            raise GameError("You can't delete a game in progress.")
-        del games[game_id]
-    return jsonify({"ok": True})
 
 
 # ---------- CLI ----------

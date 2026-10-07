@@ -99,7 +99,6 @@ function renderPending() {
   $("ready-btn").textContent = me && me.ready ? "Not ready" : "I'm ready";
   $("ready-btn").classList.toggle("primary", !(me && me.ready));
   $("leave-btn").hidden = !me;
-  $("delete-btn").hidden = state.creator !== window.ME;
 
   let msg = "";
   if (state.players.length < 2) msg = "Need at least 2 players to start.";
@@ -464,10 +463,6 @@ $("leave-btn").onclick = () => act("leave").then(() => { location.href = "/"; })
 $("ready-btn").onclick = () => {
   const me = state.players.find((p) => p.name === window.ME);
   act("ready", { ready: !(me && me.ready) });
-};
-$("delete-btn").onclick = async () => {
-  if (!confirm("Delete this game?")) return;
-  try { await api(gameUrl("delete"), {}); location.href = "/"; } catch (err) { alert(err.message); }
 };
 
 document.addEventListener("keydown", (e) => {
