@@ -171,7 +171,6 @@ function tileHTML(letter, { blank = false, extra = "", id = null } = {}) {
 }
 
 function renderBoard() {
-  const last = new Set(state.last_move.map(([r, c]) => `${r},${c}`));
   let html = "";
   for (let r = 0; r < SIZE; r++) {
     for (let c = 0; c < SIZE; c++) {
@@ -180,7 +179,7 @@ function renderBoard() {
       const cell = state.board[r][c];
       const p = placed.get(key);
       let inner = "";
-      if (cell) inner = tileHTML(cell.l, { blank: cell.b, extra: last.has(key) ? "last" : "" });
+      if (cell) inner = tileHTML(cell.l, { blank: cell.b });
       else if (p) inner = tileHTML(p.letter, { blank: p.blank, extra: "pending draggable " + validityClass(), id: p.id });
       else if (prem) inner = `<span class="prem-label">${prem === "ST" ? "★" : prem}</span>`;
       html += `<div class="cell ${prem ? "p-" + prem : ""}" data-r="${r}" data-c="${c}" title="${cell || p ? "" : PREMIUM_LABELS[prem] || ""}">${inner}</div>`;
@@ -234,14 +233,38 @@ function setPreview(tileState, words = []) {
 }
 
 // Outline each word the tentative play forms: solid when valid, dashed when not.
+// Also outlines the main word of the last play, so everyone can see where it went.
 function renderFrames() {
   const board = $("board");
   board.querySelectorAll(".word-frame").forEach((el) => el.remove());
-  board.insertAdjacentHTML("beforeend", previewWords.map((w) => {
-    const rows = w.cells.map(([r]) => r), cols = w.cells.map(([, c]) => c);
+  const frames = [];
+  const last = lastWordCells();
+  if (last.length) frames.push({ cells: last, cls: "last" });
+  for (const w of previewWords) frames.push({ cells: w.cells, cls: w.valid ? "valid" : "invalid" });
+  board.insertAdjacentHTML("beforeend", frames.map(({ cells, cls }) => {
+    const rows = cells.map(([r]) => r), cols = cells.map(([, c]) => c);
     const area = `grid-row: ${Math.min(...rows) + 1} / ${Math.max(...rows) + 2}; grid-column: ${Math.min(...cols) + 1} / ${Math.max(...cols) + 2}`;
-    return `<div class="word-frame ${w.valid ? "valid" : "invalid"}" style="${area}"></div>`;
+    return `<div class="word-frame ${cls}" style="${area}"></div>`;
   }).join(""));
+}
+
+// The full main word through the last play's tiles, found the same way the server scores it.
+function lastWordCells() {
+  const placedCells = state.last_move;
+  if (!placedCells || !placedCells.length) return [];
+  const at = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE && state.board[r][c];
+  let horizontal;
+  if (placedCells.length > 1) horizontal = new Set(placedCells.map(([r]) => r)).size === 1;
+  else {
+    const [[r, c]] = placedCells;
+    horizontal = !!(at(r, c - 1) || at(r, c + 1));
+  }
+  const [dr, dc] = horizontal ? [0, 1] : [1, 0];
+  let [r, c] = placedCells.reduce((a, b) => (a[0] + a[1] <= b[0] + b[1] ? a : b));
+  while (at(r - dr, c - dc)) { r -= dr; c -= dc; }
+  const cells = [];
+  while (at(r, c)) { cells.push([r, c]); r += dr; c += dc; }
+  return cells.length > 1 ? cells : placedCells;
 }
 
 // ---------- tile moves ----------
