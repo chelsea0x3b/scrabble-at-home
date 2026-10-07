@@ -10,8 +10,6 @@ import argparse
 import getpass
 import hashlib
 import hmac
-import json
-import os
 import secrets
 import socket
 import threading
@@ -23,11 +21,6 @@ from waitress import serve
 from dictionary import Dictionary
 from scrabble import LETTER_VALUES, Game, GameError, evaluate_move, premium_board
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-GAMES_PATH = os.path.join(DATA_DIR, "games.json")
-SECRET_PATH = os.path.join(DATA_DIR, "secret_key")
-
 app = Flask(__name__)
 app.config["PASSWORD"] = None
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -36,34 +29,6 @@ app.permanent_session_lifetime = 60 * 60 * 24 * 90
 lock = threading.Lock()
 games = {}
 dictionary = None
-
-
-# ---------- persistence ----------
-
-def load_games():
-    if not os.path.exists(GAMES_PATH):
-        return
-    with open(GAMES_PATH) as f:
-        for data in json.load(f):
-            game = Game.from_dict(data)
-            games[game.id] = game
-
-
-def save_games():
-    tmp = GAMES_PATH + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump([g.to_dict() for g in games.values()], f)
-    os.replace(tmp, GAMES_PATH)
-
-
-def load_secret_key():
-    if os.path.exists(SECRET_PATH):
-        with open(SECRET_PATH) as f:
-            return f.read().strip()
-    key = secrets.token_hex(32)
-    with open(SECRET_PATH, "w") as f:
-        f.write(key)
-    return key
 
 
 # ---------- auth ----------
@@ -172,7 +137,6 @@ def create_game():
     with lock:
         game = Game(name or f"{user}'s game", user)
         games[game.id] = game
-        save_games()
     return jsonify({"id": game.id})
 
 
@@ -188,13 +152,12 @@ def game_state(game_id):
 
 
 def game_action(fn):
-    """Run fn(game, user, body) under the lock, persist, and return the new state."""
+    """Run fn(game, user, body) under the lock and return the new state."""
     def handler(game_id):
         body = request.get_json(silent=True) or {}
         with lock:
             game = get_game(game_id)
             extra = fn(game, current_user(), body)
-            save_games()
             state = game.view(current_user())
         if extra:
             state["result"] = extra
@@ -257,7 +220,6 @@ def delete_game(game_id):
         if game.status == "active":
             raise GameError("You can't delete a game in progress.")
         del games[game_id]
-        save_games()
     return jsonify({"ok": True})
 
 
@@ -286,13 +248,12 @@ def main():
     while not password:
         password = getpass.getpass("Set the game password: ").strip()
 
-    os.makedirs(DATA_DIR, exist_ok=True)
     app.config["PASSWORD"] = password
-    app.secret_key = load_secret_key()
+    # A fresh key each run: restarting the server logs everyone out (games are in memory only).
+    app.secret_key = secrets.token_hex(32)
     dictionary = Dictionary()
-    load_games()
 
-    print(f"Loaded {len(dictionary):,} words (TWL06) and {len(games)} saved game(s).")
+    print(f"Loaded {len(dictionary):,} words (TWL06).")
     print(f"Scrabble at Home is running:")
     print(f"  This computer:  http://localhost:{args.port}")
     print(f"  Your network:   http://{lan_ip()}:{args.port}")

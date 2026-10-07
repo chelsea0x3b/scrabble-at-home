@@ -2,7 +2,6 @@
 
 import os
 import sys
-import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -133,8 +132,6 @@ class PreviewEndpoint(unittest.TestCase):
     """The live word check used by the client while placing tiles."""
 
     def setUp(self):
-        tmp = tempfile.mkdtemp()
-        server.GAMES_PATH = os.path.join(tmp, "games.json")
         server.app.config["PASSWORD"] = "pw"
         server.app.secret_key = "test"
         server.dictionary = DICT

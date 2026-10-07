@@ -46,8 +46,7 @@ OK, EW and ZE are not included.
 
 ## Data
 
-Games are saved to `data/games.json` after every move, so restarting the server doesn't
-lose games. Restarting with a different password logs everyone out.
+Games live in memory only. Restarting the server ends all games and logs everyone out.
 
 ## Tests
 

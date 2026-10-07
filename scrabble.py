@@ -202,16 +202,6 @@ class Game:
         self.updated_at = time.time()
         self.add_player(creator)
 
-    # ---- persistence ----
-    def to_dict(self):
-        return dict(self.__dict__)
-
-    @classmethod
-    def from_dict(cls, data):
-        game = cls.__new__(cls)
-        game.__dict__.update(data)
-        return game
-
     def touch(self):
         self.version += 1
         self.updated_at = time.time()
