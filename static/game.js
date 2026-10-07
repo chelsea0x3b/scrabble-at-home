@@ -69,11 +69,26 @@ function applyState(data) {
   schedulePreview();
 }
 
+let rackSynced = false;     // false until the first rack arrives, so a page load doesn't count as drawing tiles
+const freshIds = new Set();  // tiles just drawn from the bag, popped into the rack on the next render
+
 function syncRack(serverRack) {
+  const firstSync = !rackSynced;
+  rackSynced = true;
   const mine = rack.map((t) => t.letter).sort().join("");
   const theirs = [...serverRack].sort().join("");
   if (mine === theirs) return;
-  rack = serverRack.map((letter) => ({ id: nextTileId++, letter }));
+  // Keep the tiles still in hand, in their order; whatever's left over is new from the bag.
+  const incoming = [...serverRack];
+  const kept = rack.filter((t) => {
+    const i = incoming.indexOf(t.letter);
+    if (i < 0) return false;
+    incoming.splice(i, 1);
+    return true;
+  });
+  const drawn = incoming.map((letter) => ({ id: nextTileId++, letter }));
+  if (!firstSync) drawn.forEach((t) => freshIds.add(t.id));
+  rack = [...kept, ...drawn];
   placed.clear();
   selectedId = null;
   exchangeSel.clear();
@@ -86,6 +101,7 @@ const placedIds = () => new Set([...placed.values()].map((t) => t.id));
 // ---------- rendering ----------
 
 function render() {
+  const before = tileRects();
   $("game-title").textContent = state.name;
   const pending = state.status === "pending";
   $("pending-view").hidden = !pending;
@@ -93,6 +109,54 @@ function render() {
   if (pending) renderPending();
   else renderPlay();
   document.title = (isMyTurn() ? "▶ Your turn · " : "") + "Scrabble at Home";
+  flyTiles(before);
+}
+
+// ---------- rack tile motion ----------
+// Every render rebuilds the tiles, so remember where each rack tile was and glide it from there
+// to wherever it is now: rack to board and back, square to square, shuffles and swaps.
+
+const FLY_MS = 220;
+let dropFrom = null;  // {id, rect}: a dragged tile starts its glide from where it was let go
+let refillAt = 0;     // after your play, new tiles wait for the played ones to land
+
+function tileRects() {
+  const rects = new Map();
+  for (const el of document.querySelectorAll(".board .tile[data-id], .rack .tile[data-id]")) {
+    rects.set(Number(el.dataset.id), el.getBoundingClientRect());
+  }
+  return rects;
+}
+
+function flyTiles(before) {
+  const drop = dropFrom;
+  dropFrom = null;
+  const fresh = [...freshIds];
+  freshIds.clear();
+  if (reduceMotion.matches) return;
+  for (const el of document.querySelectorAll(".board .tile[data-id], .rack .tile[data-id]")) {
+    const id = Number(el.dataset.id);
+    const from = drop?.id === id ? drop.rect : before.get(id);
+    const to = el.getBoundingClientRect();
+    if (!from?.width || !to.width || fresh.includes(id)) continue;
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    const scale = from.width / to.width;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(scale - 1) < 0.01) continue;
+    // Added on top of the tile's own transform (a selected lift, the hover bob), so it lands on it.
+    el.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: "translate(0, 0) scale(1)" }],
+      { duration: FLY_MS, easing: "cubic-bezier(.2, .8, .3, 1)", composite: "add" });
+    el.animate([{ zIndex: 20 }, { zIndex: 20 }], { duration: FLY_MS });
+  }
+  // Tiles drawn from the bag pop up into the rack one at a time.
+  const wait = Math.max(0, refillAt - performance.now());
+  fresh.forEach((id, i) => {
+    $("rack").querySelector(`.tile[data-id="${id}"]`)?.animate([
+      { transform: "translateY(60%) scale(0.3)", opacity: 0 },
+      { transform: "translateY(-10%) scale(1.08)", opacity: 1, offset: 0.7 },
+      { transform: "none", opacity: 1 },
+    ], { duration: 260, delay: wait + i * 90, easing: "ease-out", fill: "backwards" });
+  });
 }
 
 function renderPending() {
@@ -232,6 +296,7 @@ function landTiles() {
   const mine = justSubmitted;
   justSubmitted = false;
   if (first || !move.length || reduceMotion.matches) return;
+  if (mine) refillAt = performance.now() + move.length * DROP_MS;
   const play = [...state.history].reverse().find((h) => h.kind === "play");
   // Pass & play holds the hand-off screen until the last points have popped up and faded.
   landingUntil = performance.now() + animatePlay(play && JSON.stringify(play.cells) === key ? play : { cells: move }, { mine }) + 200;
@@ -639,8 +704,9 @@ async function act(action, body, confirmMsg) {
   render();
   try {
     const data = await api(gameUrl(action), body || {});
-    if (action === "play") { placed.clear(); justSubmitted = true; }
-    if (action === "exchange") { exchangeMode = false; exchangeSel.clear(); }
+    // Take the played or swapped tiles out of the rack, so syncRack keeps the rest and only the new ones pop in.
+    if (action === "play") { rack = rack.filter((t) => !placedIds().has(t.id)); placed.clear(); justSubmitted = true; }
+    if (action === "exchange") { rack = rack.filter((t) => !exchangeSel.has(t.id)); exchangeMode = false; exchangeSel.clear(); }
     busy = false;
     applyState(data);
     if (action === "play") {
@@ -704,16 +770,19 @@ function onPointerUp(e) {
   const d = drag;
   drag = null;
   if (!d.ghost) return onTileClick(d.id, d.el);
+  dropFrom = { id: d.id, rect: d.ghost.getBoundingClientRect() };
   d.ghost.remove();
   d.el.classList.remove("dragging");
   const target = document.elementFromPoint(e.clientX, e.clientY);
   const cell = target && target.closest(".cell");
-  if (cell) return placeTile(d.id, Number(cell.dataset.r), Number(cell.dataset.c));
   const rackTarget = target && target.closest(".rack, .rack-area");
-  if (rackTarget) {
+  if (cell) placeTile(d.id, Number(cell.dataset.r), Number(cell.dataset.c));
+  else if (rackTarget) {
     const over = target.closest(".rack .tile");
-    return returnTile(d.id, over ? Number(over.dataset.id) : (findPlacedKey(d.id) ? null : -1));
+    returnTile(d.id, over ? Number(over.dataset.id) : (findPlacedKey(d.id) ? null : -1));
   }
+  // Let go somewhere it can't go (or waiting on a blank's letter): glide back to where it was.
+  if (dropFrom) render();
 }
 
 function onTileClick(id, el) {
