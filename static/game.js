@@ -11,8 +11,10 @@ let selectedId = null;
 let exchangeMode = false;
 const exchangeSel = new Set();
 let previewTimer = null;
-let previewValid = null;   // null = unknown, true/false = all words valid?
+let previewValid = null;   // tile-level marker: false when the placement breaks a rule, else null
+let previewWords = [];     // [{cells, valid}] from the last preview, framed on the board
 let busy = false;
+let revealedAt = null;     // pass & play: history length when the current player last showed their tiles
 
 const $ = (id) => document.getElementById(id);
 
@@ -113,6 +115,7 @@ function renderPlay() {
   renderBoard();
   renderRack();
   renderHistory();
+  renderHandoff();
   $("bag-count").textContent = state.bag_count;
 
   const active = state.status === "active" && isPlayer();
@@ -131,27 +134,33 @@ function renderScores() {
     const turn = state.status === "active" && i === state.turn_index;
     const winner = state.status === "finished" && state.winners.includes(p.name);
     return `
-      <div class="score-card ${turn ? "turn" : ""} ${winner ? "winner" : ""} ${p.name === window.ME ? "me" : ""}">
-        <div class="score-name">${winner ? "🏆 " : ""}${esc(p.name)}${p.name === window.ME ? " (you)" : ""}</div>
-        <div class="score-value">${p.score}</div>
+      <div class="score-card ${turn ? "turn" : ""} ${winner ? "winner" : ""} ${p.name === window.ME && !state.local ? "me" : ""}">
+        <div class="score-name">${winner ? "🏆 " : ""}${esc(p.name)}${p.name === window.ME && !state.local ? " (you)" : ""}</div>
         <div class="muted small">${turn ? "playing…" : `${p.tiles} tiles`}</div>
+        <div class="score-value">${p.score}</div>
       </div>`;
   }).join("");
 }
 
+// Only shown at the end; whose turn it is lives in the score list.
 function renderBanner() {
   const b = $("banner");
-  if (state.status === "finished") {
-    const w = state.winners;
-    b.textContent = w.length === 1 ? `🎉 ${w[0]} wins! 🎉` : `It's a tie: ${w.join(" & ")}!`;
-    b.hidden = false;
-  } else if (isMyTurn()) {
-    b.textContent = "Your turn!";
-    b.hidden = false;
-  } else {
-    b.hidden = true;
-  }
-  b.classList.toggle("your-turn", isMyTurn());
+  b.hidden = state.status !== "finished";
+  if (b.hidden) return;
+  const w = state.winners;
+  b.textContent = w.length === 1 ? `🎉 ${w[0]} wins! 🎉` : `It's a tie: ${w.join(" & ")}!`;
+}
+
+// Pass & play: cover the board between turns so nobody sees the next player's tiles.
+function renderHandoff() {
+  const show = state.local && state.status === "active" && isPlayer() && revealedAt !== state.history.length;
+  $("handoff-modal").hidden = !show;
+  if (!show) return;
+  $("handoff-name").textContent = state.players[state.turn_index].name;
+  const last = [...state.history].reverse().find((h) => h.player);
+  $("handoff-last").textContent = last
+    ? `${last.player} ${last.text}${last.kind === "play" ? ` for ${last.score} points` : ""}.`
+    : "";
 }
 
 function tileHTML(letter, { blank = false, extra = "", id = null } = {}) {
@@ -178,6 +187,7 @@ function renderBoard() {
     }
   }
   $("board").innerHTML = html;
+  renderFrames();
 }
 
 function renderRack() {
@@ -213,12 +223,25 @@ function validityClass() {
   return previewValid === null ? "" : previewValid ? "valid" : "invalid";
 }
 
-function setPreviewValid(v) {
-  previewValid = v;
+function setPreview(tileState, words = []) {
+  previewValid = tileState;
+  previewWords = words;
   for (const el of document.querySelectorAll(".board .tile.pending")) {
     el.classList.remove("valid", "invalid");
-    if (v !== null) el.classList.add(v ? "valid" : "invalid");
+    if (tileState !== null) el.classList.add(tileState ? "valid" : "invalid");
   }
+  renderFrames();
+}
+
+// Outline each word the tentative play forms: solid when valid, dashed when not.
+function renderFrames() {
+  const board = $("board");
+  board.querySelectorAll(".word-frame").forEach((el) => el.remove());
+  board.insertAdjacentHTML("beforeend", previewWords.map((w) => {
+    const rows = w.cells.map(([r]) => r), cols = w.cells.map(([, c]) => c);
+    const area = `grid-row: ${Math.min(...rows) + 1} / ${Math.max(...rows) + 2}; grid-column: ${Math.min(...cols) + 1} / ${Math.max(...cols) + 2}`;
+    return `<div class="word-frame ${w.valid ? "valid" : "invalid"}" style="${area}"></div>`;
+  }).join(""));
 }
 
 // ---------- tile moves ----------
@@ -300,7 +323,7 @@ function shuffleRack() {
 
 function schedulePreview() {
   clearTimeout(previewTimer);
-  setPreviewValid(null);
+  setPreview(null);
   if (!state || state.status !== "active" || !placed.size) {
     if (state && state.status === "active" && !exchangeMode) setStatus(isMyTurn() ? "Place tiles on the board, then Submit." : `Waiting for ${state.players[state.turn_index].name}…`);
     return;
@@ -311,10 +334,10 @@ function schedulePreview() {
       const res = await api(gameUrl("preview"), { placements: placementList() });
       if (!placed.size || JSON.stringify(placementList()) !== sent) return;  // stale
       if (!res.ok) {
-        setPreviewValid(false);
+        setPreview(false);
         return setStatus(res.error, "warn");
       }
-      setPreviewValid(res.valid);
+      setPreview(null, res.words);
       const chips = res.words.map((w) =>
         `<span class="word-chip ${w.valid ? "valid" : "invalid"}" title="${w.valid ? "Valid word" : "Not in the dictionary"}">${w.valid ? "✓" : "✗"} ${esc(w.word)} <small>${w.score}</small></span>`
       ).join(" ");
@@ -458,6 +481,14 @@ $("submit-btn").onclick = () => {
 $("exchange-btn").onclick = toggleExchange;
 $("pass-btn").onclick = () => act("pass", {}, "Pass your turn?");
 
+$("handoff-btn").onclick = () => {
+  revealedAt = state.history.length;
+  placed.clear();
+  selectedId = null;
+  render();
+  schedulePreview();
+};
+
 $("join-btn").onclick = () => act("join");
 $("leave-btn").onclick = () => act("leave").then(() => { location.href = "/"; });
 $("ready-btn").onclick = () => {
@@ -467,7 +498,7 @@ $("ready-btn").onclick = () => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { selectedId = null; if (state) render(); }
-  if (e.key === "Enter" && isMyTurn() && placed.size && !busy && $("blank-modal").hidden) $("submit-btn").click();
+  if (e.key === "Enter" && isMyTurn() && placed.size && !busy && $("blank-modal").hidden && $("handoff-modal").hidden) $("submit-btn").click();
 });
 
 poll();

@@ -30,21 +30,32 @@
 
   <!-- Game in progress / finished -->
   <main id="play-view" class="play" hidden>
-    <aside class="panel history-panel">
-      <h3>Turn history</h3>
-      <ol id="history"></ol>
-    </aside>
+    <div class="side-left">
+      <aside class="panel scores-panel">
+        <h3>Scores</h3>
+        <div id="scores" class="scores"></div>
+      </aside>
+      <aside class="panel history-panel">
+        <h3>Turn history</h3>
+        <ol id="history"></ol>
+      </aside>
+    </div>
 
     <section class="center">
-      <div id="scores" class="scores"></div>
       <div id="banner" class="banner" hidden></div>
       <div id="board" class="board"></div>
 
       <div class="rack-area">
-        <div id="rack" class="rack"></div>
+        <div class="rack-row">
+          <button id="shuffle-btn" class="icon-btn" title="Shuffle your tiles" aria-label="Shuffle your tiles">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+          </button>
+          <div id="rack" class="rack"></div>
+          <button id="recall-btn" class="icon-btn" title="Bring tiles back to your rack" aria-label="Bring tiles back to your rack">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg>
+          </button>
+        </div>
         <div class="controls">
-          <button id="shuffle-btn" class="btn" title="Shuffle your tiles">Shuffle</button>
-          <button id="recall-btn" class="btn" title="Bring tiles back to your rack">Recall</button>
           <button id="submit-btn" class="btn primary">Submit</button>
           <button id="exchange-btn" class="btn">Exchange</button>
           <button id="pass-btn" class="btn">Pass</button>
@@ -61,6 +72,16 @@
       <p class="muted small">Tiles left in bag: <b id="bag-count">–</b></p>
     </aside>
   </main>
+
+  <!-- Pass & play: hand the device to the next player -->
+  <div id="handoff-modal" class="modal handoff" hidden>
+    <div class="card">
+      <p id="handoff-last" class="muted"></p>
+      <h3>Pass the device to</h3>
+      <h2 id="handoff-name"></h2>
+      <button id="handoff-btn" class="btn primary">Show my tiles</button>
+    </div>
+  </div>
 
   <!-- Blank tile letter picker -->
   <div id="blank-modal" class="modal" hidden>

@@ -161,6 +161,13 @@ class PreviewEndpoint(unittest.TestCase):
             [("AT", 3, True), ("HA", 5, True), ("ET", 3, True)],
         )
 
+    def test_reports_the_squares_each_word_covers(self):
+        res = self.preview((8, 7, "A"), (8, 8, "T"))
+        self.assertEqual(
+            {w["word"]: w["cells"] for w in res["words"]},
+            {"AT": [[8, 7], [8, 8]], "HA": [[7, 7], [8, 7]], "ET": [[7, 8], [8, 8]]},
+        )
+
     def test_flags_each_invalid_word_individually(self):
         res = self.preview((8, 7, "Z"), (8, 8, "A"))
         self.assertTrue(res["ok"])
@@ -181,6 +188,56 @@ class PreviewEndpoint(unittest.TestCase):
         self.preview((8, 7, "A"), (8, 8, "T"))
         self.assertEqual(game.version, version)
         self.assertIsNone(game.board[8][7])
+
+
+class PassAndPlay(unittest.TestCase):
+    """One device plays every seat: the creator acts for whoever's turn it is."""
+
+    def setUp(self):
+        server.app.config["PASSWORD"] = "pw"
+        server.app.secret_key = "test"
+        server.dictionary = DICT
+        server.games.clear()
+        self.client = server.app.test_client()
+        self.client.post("/login", data={"username": "Host", "password": "pw"})
+
+    def create(self, players):
+        return self.client.post("/api/games", json={"local": True, "players": players})
+
+    def test_starts_right_away_with_the_named_players(self):
+        game_id = self.create(["Mom", " Dad ", ""]).get_json()["id"]
+        game = server.games[game_id]
+        self.assertTrue(game.local)
+        self.assertEqual(game.status, "active")
+        self.assertEqual([p["name"] for p in game.players], ["Mom", "Dad"])
+
+    def test_creator_sees_and_plays_the_current_players_rack(self):
+        game = server.games[self.create(["Mom", "Dad"]).get_json()["id"]]
+        game.turn = 0
+        state = self.client.get(f"/api/games/{game.id}").get_json()
+        self.assertEqual(state["my_index"], 0)
+        self.assertEqual(state["rack"], game.players[0]["rack"])
+
+        state = self.client.post(f"/api/games/{game.id}/pass", json={}).get_json()
+        self.assertEqual(state["turn_index"], 1)
+        self.assertEqual(state["my_index"], 1)
+        self.assertEqual(state["rack"], game.players[1]["rack"])
+
+    def test_other_users_only_watch(self):
+        game = server.games[self.create(["Mom", "Dad"]).get_json()["id"]]
+        other = server.app.test_client()
+        other.post("/login", data={"username": "Guest", "password": "pw"})
+        state = other.get(f"/api/games/{game.id}").get_json()
+        self.assertIsNone(state["my_index"])
+        self.assertEqual(state["rack"], [])
+        res = other.post(f"/api/games/{game.id}/pass", json={})
+        self.assertEqual(res.status_code, 400)
+
+    def test_rejects_bad_player_lists(self):
+        self.assertIn("2 to 4", self.create(["Solo"]).get_json()["error"])
+        self.assertIn("2 to 4", self.create(list("ABCDE")).get_json()["error"])
+        self.assertIn("different", self.create(["Mom", "Mom"]).get_json()["error"])
+        self.assertIn("20", self.create(["Mom", "x" * 21]).get_json()["error"])
 
 
 if __name__ == "__main__":

@@ -123,10 +123,17 @@ def list_games():
 @app.route("/api/games", methods=["POST"])
 @login_required(api=True)
 def create_game():
-    name = " ".join((request.get_json(silent=True) or {}).get("name", "").split())[:40]
+    body = request.get_json(silent=True) or {}
+    name = " ".join(str(body.get("name", "")).split())[:40]
     user = current_user()
+    local_players = None
+    if body.get("local"):
+        local_players = [" ".join(str(n).split()) for n in body.get("players", [])]
+        local_players = [n for n in local_players if n]
+        if any(len(n) > 20 for n in local_players):
+            raise GameError("Player names can be at most 20 characters.")
     with lock:
-        game = Game(name or f"{user}'s game", user)
+        game = Game(name or f"{user}'s game", user, local_players)
         games[game.id] = game
     return jsonify({"id": game.id})
 
@@ -139,7 +146,15 @@ def game_state(game_id):
         since = request.args.get("since", type=int)
         if since is not None and since == game.version:
             return jsonify({"unchanged": True, "version": game.version})
-        return jsonify(game.view(current_user()))
+        return jsonify(game.view(acting_user(game)))
+
+
+def acting_user(game):
+    """In a pass-and-play game, the creator's device plays whoever's turn it is."""
+    user = current_user()
+    if game.local and user == game.creator and game.status == "active":
+        return game.players[game.turn]["name"]
+    return user
 
 
 def game_action(fn):
@@ -148,8 +163,8 @@ def game_action(fn):
         body = request.get_json(silent=True) or {}
         with lock:
             game = get_game(game_id)
-            extra = fn(game, current_user(), body)
-            state = game.view(current_user())
+            extra = fn(game, acting_user(game), body)
+            state = game.view(acting_user(game))
         if extra:
             state["result"] = extra
         return jsonify(state)

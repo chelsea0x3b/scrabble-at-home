@@ -69,7 +69,8 @@ def evaluate_move(board, placements, dictionary=None):
     placements: list of {"r", "c", "l", "b"} where l is the letter shown on
     the board and b is True if a blank tile is being used.
 
-    Returns {"words": [{"word", "score"}], "score": total}.
+    Returns {"words": [{"word", "score", "cells"}], "score": total}, where cells
+    lists the [r, c] squares each word covers.
     Raises GameError for illegal moves.
     """
     if not placements:
@@ -168,7 +169,8 @@ def evaluate_move(board, placements, dictionary=None):
         raise GameError("Your tiles must form a word of at least two letters.")
 
     words = [
-        {"word": "".join(at(r, c)["l"] for r, c in cells), "score": score_word(cells)}
+        {"word": "".join(at(r, c)["l"] for r, c in cells), "score": score_word(cells),
+         "cells": [[r, c] for r, c in cells]}
         for cells in word_cells
     ]
     if dictionary is not None:
@@ -185,7 +187,8 @@ def evaluate_move(board, placements, dictionary=None):
 
 
 class Game:
-    def __init__(self, name, creator):
+    def __init__(self, name, creator, local_players=None):
+        """local_players: names for a pass-and-play game, played on the creator's device."""
         self.id = secrets.token_urlsafe(6)
         self.name = name
         self.creator = creator
@@ -200,7 +203,17 @@ class Game:
         self.last_move = []
         self.version = 0
         self.updated_at = time.time()
-        self.add_player(creator)
+        self.local = bool(local_players)
+        if self.local:
+            if not (MIN_PLAYERS <= len(local_players) <= MAX_PLAYERS):
+                raise GameError(f"Pass and play needs {MIN_PLAYERS} to {MAX_PLAYERS} players.")
+            if len(set(local_players)) != len(local_players):
+                raise GameError("Each player needs a different name.")
+            for n in local_players:
+                self.add_player(n)
+            self.start()
+        else:
+            self.add_player(creator)
 
     def touch(self):
         self.version += 1
@@ -303,7 +316,8 @@ class Game:
             text += " (" + ", ".join(w["word"] for w in result["words"][1:]) + ")"
         if result["bingo"]:
             text += " — BINGO!"
-        self.log(name, "play", text, result["score"], result["words"])
+        words = [{"word": w["word"], "score": w["score"]} for w in result["words"]]
+        self.log(name, "play", text, result["score"], words)
 
         if not p["rack"] and not self.bag:
             self._finish(went_out=p)
@@ -374,6 +388,7 @@ class Game:
             "id": self.id,
             "name": self.name,
             "creator": self.creator,
+            "local": self.local,
             "status": self.status,
             "players": [p["name"] for p in self.players],
             "turn": self.players[self.turn]["name"] if self.status == "active" else None,
