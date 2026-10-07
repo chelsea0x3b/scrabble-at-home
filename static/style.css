@@ -156,8 +156,8 @@ input {
 /* Game sections sit straight on the page, without boxes. */
 .panel { min-width: 0; }
 /* Left column fills the window height; the history panel takes whatever the scores and rack leave. */
-.side-left { display: flex; flex-direction: column; gap: 4px; height: max(560px, calc(100vh - 76px)); }
-.history-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 16px; }
+.side-left { display: flex; flex-direction: column; gap: 24px; height: max(560px, calc(100vh - 76px)); }
+.history-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .center { display: flex; flex-direction: column; gap: 10px; min-width: 0; justify-self: center; width: var(--board-size); }
 
 #history {
@@ -182,15 +182,14 @@ input {
 .two-letter .new-letter { font-weight: inherit; background: var(--accent); border-radius: 2px; padding: 1px 1px; }
 
 /* ---------- scores ---------- */
-.scores { display: flex; flex-direction: column; gap: 4px; }
+.scores { display: flex; flex-direction: column; }
+/* Plain rows like the turn history; whoever's turn it is shows in purple. */
 .score-card {
   display: flex; align-items: baseline; gap: 8px; min-width: 0;
-  border: 1px solid var(--border); border-left-width: 4px; border-radius: 6px; padding: 4px 8px;
+  padding: 5px 2px; border-bottom: 1px solid var(--line);
 }
-.score-card.turn { border-color: var(--accent-strong); background: var(--accent-soft); }
-.score-card.winner { border-color: #d9a520; background: #fff8e1; }
+.score-card.turn, .score-card.turn .muted { color: var(--accent-strong); }
 .score-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.score-card.me .score-name { color: var(--accent-strong); }
 .score-value { font-size: 18px; font-weight: 800; line-height: 1.2; min-width: 3ch; text-align: right; }
 
 .banner {
@@ -279,6 +278,7 @@ input {
 
 /* ---------- rack ---------- */
 .rack-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rack-area h3 { align-self: stretch; margin-bottom: 2px; }  /* + the 10px gap = the usual 12px under headings */
 /* Tiles size themselves to the column: 100cqw is the rack row's width. */
 .rack-row { display: flex; align-items: center; gap: 6px; width: 100%; container-type: inline-size; }
 .icon-btn {
@@ -310,7 +310,8 @@ input {
 
 .controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; }
 .controls .btn { padding: 8px 12px; }
-.status { min-height: 20px; font-size: 14px; text-align: center; color: var(--muted); }
+.status { font-size: 14px; text-align: center; color: var(--muted); }
+.status:empty { display: none; }  /* takes no space until there's a preview or message */
 .status.preview { color: var(--accent-strong); font-weight: 600; }
 .status.ok { color: var(--accent-strong); font-weight: 700; }
 .status.warn { color: #9a6a00; }
@@ -334,11 +335,14 @@ input {
   .scores-panel { order: 0; }
   .scores-panel h3 { display: none; }
   .scores { flex-direction: row; flex-wrap: wrap; }
-  .score-card { flex: 1 1 120px; }
+  .scores { gap: 0 16px; }
+  .score-card { flex: 1 1 100px; }
+  .score-card .muted { display: none; }  /* room for names; the purple row shows whose turn it is */
   .center { order: 1; }
   .rack-area { order: 2; }
+  .rack-area h3 { display: none; }
   #recall-btn svg { transform: none; }
-  .history-panel { order: 3; margin-top: 0; }
+  .history-panel { order: 3; }
   .words-panel { order: 4; }
   #history { max-height: 260px; }
   .two-letter { grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); }
