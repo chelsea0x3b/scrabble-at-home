@@ -8,6 +8,8 @@ Usage:
 
 import argparse
 import hmac
+import logging
+import re
 import secrets
 import socket
 import threading
@@ -29,6 +31,8 @@ app.permanent_session_lifetime = 60 * 60 * 24 * 90
 lock = threading.Lock()
 games = {}
 dictionary = None
+
+log = logging.getLogger("scrabble")
 
 
 # ---------- auth ----------
@@ -59,9 +63,11 @@ def login():
         password = request.form.get("password", "")
         if not hmac.compare_digest(password.encode(), app.config["PASSWORD"].encode()):
             error = "Wrong password."
+            log.warning("LOGIN FAILED  %s  wrong password (name %r)", request.remote_addr, username)
         elif not (1 <= len(username) <= 20):
             error = "Pick a name between 1 and 20 characters."
         else:
+            log.info("LOGIN OK      %s  as %r", request.remote_addr, username)
             session.clear()
             session.permanent = True
             session["user"] = username
@@ -72,8 +78,26 @@ def login():
 
 @app.route("/logout")
 def logout():
+    if current_user():
+        log.info("LOGOUT        %s  %r", request.remote_addr, current_user())
     session.clear()
     return redirect(url_for("login"))
+
+
+# ---------- request log ----------
+
+# The lobby and game pages poll these every few seconds; logging each one would bury everything else.
+POLLS = re.compile(r"^/api/games(/[^/]+)?$")
+
+
+@app.after_request
+def log_request(response):
+    is_poll = request.method == "GET" and POLLS.match(request.path) and response.status_code == 200
+    if app.config.get("LOG_POLLS") or not is_poll:
+        log.info("%-13s %s  %s %s  user=%r",
+                 response.status_code, request.remote_addr, request.method, request.full_path.rstrip("?"),
+                 current_user())
+    return response
 
 
 # ---------- pages ----------
@@ -242,7 +266,11 @@ def main():
     parser.add_argument("--password", default="default", help='Shared password everyone uses to log in (default: "default")')
     parser.add_argument("--host", default="0.0.0.0", help="Interface to listen on (default: all)")
     parser.add_argument("--port", type=int, default=8000, help="Port to listen on (default: 8000)")
+    parser.add_argument("--log-polls", action="store_true", help="Also log the background polling every page does")
     args = parser.parse_args()
+
+    logging.basicConfig(format="%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
+    app.config["LOG_POLLS"] = args.log_polls
 
     app.config["PASSWORD"] = args.password
     # A fresh key each run: restarting the server logs everyone out (games are in memory only).

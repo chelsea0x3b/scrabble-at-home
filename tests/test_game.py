@@ -313,5 +313,19 @@ class PassAndPlay(unittest.TestCase):
         self.assertIn("30", self.create(["Mom", "x" * 31]).get_json()["error"])
 
 
+class FileAccess(unittest.TestCase):
+    """Only static/ is served; nothing else in the project or on disk is reachable."""
+
+    def test_paths_outside_static_are_not_served(self):
+        client = server.app.test_client()
+        self.assertEqual(client.get("/static/style.css").status_code, 200)
+        for path in ["/app.py", "/assets/twl06.zip", "/templates/login.html",
+                     "/static/../app.py", "/static/%2e%2e/app.py", "/static/..%2fapp.py",
+                     "/static/..%5capp.py", "/static/%2fetc%2fpasswd", "/static/../../../../etc/passwd"]:
+            response = client.get(path)
+            self.assertNotEqual(response.status_code, 200, path)
+            self.assertNotIn(b"import", response.data, path)
+
+
 if __name__ == "__main__":
     unittest.main()
