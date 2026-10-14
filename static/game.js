@@ -516,6 +516,14 @@ function renderRack() {
 const REPLAY_ICON = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.2 1.6v2.8H9.4"/></svg>`;
 
+// Each word in a play links to its entry in the Official Scrabble Players Dictionary.
+function linkWords(h) {
+  const words = new Set((h.words || []).map((w) => w.word));
+  return esc(h.text).replace(/\b[A-Z]+\b/g, (w) => words.has(w)
+    ? `<a class="word-link" href="https://scrabble.merriam.com/finder/${w.toLowerCase()}" target="_blank" rel="noopener noreferrer" title="Look up ${w}">${w}</a>`
+    : w);
+}
+
 function renderHistory() {
   const el = $("history");
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
@@ -525,7 +533,8 @@ function renderHistory() {
       ? `<span class="pts ${h.score < 0 ? "neg" : ""}">${h.score > 0 ? "+" : ""}${h.score}</span>` : "";
     const replay = h.kind === "play" && h.cells?.length
       ? `<button class="replay-btn" data-replay="${i}" title="Replay this turn and the ones after it" aria-label="Replay from this turn">${REPLAY_ICON}</button>` : "";
-    return `<li class="h-${h.kind}"><span>${who}${esc(h.text)}</span><span class="h-right">${replay}${score}</span></li>`;
+    const text = h.kind === "play" ? linkWords(h) : esc(h.text);
+    return `<li class="h-${h.kind}"><span>${who}${text}</span><span class="h-right">${replay}${score}</span></li>`;
   }).join("");
   if (atBottom) el.scrollTop = el.scrollHeight;
 }

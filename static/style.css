@@ -170,6 +170,8 @@ input {
 }
 #history li.h-draw, #history li.h-start, #history li.h-end, #history li.h-info { color: var(--muted); font-style: italic; }
 #history li.h-end { color: var(--accent-strong); font-weight: 600; font-style: normal; }
+.word-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+.word-link:hover { color: var(--accent-strong); text-decoration-style: solid; }
 .pts { font-weight: 700; color: var(--accent-strong); white-space: nowrap; }
 .pts.neg { color: var(--danger); }
 .h-right { display: flex; align-items: center; gap: 6px; }
