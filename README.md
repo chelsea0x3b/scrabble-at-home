@@ -22,9 +22,10 @@ the same seat back up.
 
 ## Dictionary
 
-Words are checked against **TWL06** (178,691 words), bundled as `twl06.zip` and loaded at
-startup. TWL06 is the 2006 North American tournament list, so a few newer words such as
-OK, EW and ZE are not included.
+Words are checked against **NWL2023** (196,601 words), the current North American tournament
+list, bundled as `nwl2023.zip` and loaded at startup. It includes the newer words that the
+older 2006 list (TWL06) lacked, such as DA, OK, EW and SELFIE. If `nwl2023.zip` is missing,
+the server falls back to TWL06 (`twl06.zip`).
 
 ## Data
 

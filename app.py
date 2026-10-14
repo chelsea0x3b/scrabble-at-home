@@ -287,7 +287,7 @@ def main():
     app.secret_key = secrets.token_hex(32)
     dictionary = Dictionary()
 
-    print(f"Loaded {len(dictionary):,} words (TWL06).")
+    print(f"Loaded {len(dictionary):,} words ({dictionary.name}).")
     print(f"Scrabble at Home is running:")
     print(f"  This computer:  http://localhost:{args.port}")
     print(f"  Your network:   http://{lan_ip()}:{args.port}")
