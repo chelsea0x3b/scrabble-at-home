@@ -13,6 +13,7 @@ import re
 import secrets
 import socket
 import threading
+import urllib.request
 from functools import wraps
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
@@ -260,6 +261,15 @@ def lan_ip():
         return "127.0.0.1"
 
 
+def public_ip():
+    """The router's address as the internet sees it, or None if we can't tell."""
+    try:
+        with urllib.request.urlopen("https://api.ipify.org", timeout=3) as r:
+            return r.read().decode().strip()
+    except OSError:
+        return None
+
+
 def main():
     global dictionary
     parser = argparse.ArgumentParser(description="Host a Scrabble game for your family.")
@@ -281,6 +291,11 @@ def main():
     print(f"Scrabble at Home is running:")
     print(f"  This computer:  http://localhost:{args.port}")
     print(f"  Your network:   http://{lan_ip()}:{args.port}")
+    ip = public_ip()
+    if ip:
+        print(f"  The internet:   http://{ip}:{args.port}  (needs port {args.port} forwarded on your router)")
+    else:
+        print("  The internet:   couldn't look up your public IP")
     if args.password == "default":
         print('  Password:       "default" (use --password to set your own before sharing it outside your home)')
     serve(app, host=args.host, port=args.port, threads=8)
