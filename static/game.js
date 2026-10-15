@@ -53,7 +53,10 @@ async function poll() {
 let autoJoined = false;
 
 function applyState(data) {
+  const wasMyTurn = state ? isMyTurn() : null;  // null on page load: no chime for a turn you already had
   state = data;
+  // Pass & play is always "your turn" on the creator's device; the handoff screen covers it instead.
+  if (wasMyTurn === false && isMyTurn() && !state.local) playTurnChime();
   // Opening a game you're not in joins it, if there's a seat.
   if (!autoJoined && state.status === "pending" && !isPlayer() && state.players.length < 4) {
     autoJoined = true;
@@ -97,6 +100,36 @@ function syncRack(serverRack) {
 const isMyTurn = () => state && state.status === "active" && state.my_index === state.turn_index;
 const isPlayer = () => state && state.my_index !== null && state.my_index !== undefined;
 const placedIds = () => new Set([...placed.values()].map((t) => t.id));
+
+// ---------- sound ----------
+
+// A soft two-note chime when it becomes your turn, synthesized so there's no audio file.
+// Browsers only allow sound once the page has been clicked or typed in, so the audio
+// context starts on the first interaction; before that the chime is silently skipped.
+let audio = null;
+
+function unlockAudio() {
+  if (!audio) audio = new AudioContext();
+  if (audio.state === "suspended") audio.resume();
+}
+
+function playTurnChime() {
+  if (!audio || audio.state !== "running") return;
+  const now = audio.currentTime;
+  for (const [freq, delay] of [[659.25, 0], [987.77, 0.14]]) {  // E5 rising to B5
+    const t = now + delay;
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.05, t + 0.03);           // quiet, with no click at the start
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);     // long, gentle fade
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t);
+    osc.stop(t + 1.2);
+  }
+}
 
 // ---------- rendering ----------
 
@@ -829,6 +862,8 @@ function onBoardClick(e) {
 // ---------- wiring ----------
 
 document.addEventListener("pointerdown", onPointerDown);
+document.addEventListener("pointerdown", unlockAudio);
+document.addEventListener("keydown", unlockAudio);
 document.addEventListener("pointermove", onPointerMove, { passive: false });
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", () => { if (drag?.ghost) { drag.ghost.remove(); drag.el.classList.remove("dragging"); } drag = null; });
