@@ -524,9 +524,17 @@ function linkWords(h) {
     : w);
 }
 
+// The history follows new turns while you're scrolled to the bottom. This is decided by your
+// own scrolling, not measured at redraw: the status line above it can grow and shrink the
+// box, which would otherwise push the newest entries out of view and stop the following.
+let followHistory = true;
+
+function scrollHistoryToEnd() {
+  if (followHistory) $("history").scrollTop = $("history").scrollHeight;
+}
+
 function renderHistory() {
   const el = $("history");
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
   el.innerHTML = state.history.map((h, i) => {
     const who = h.player ? `<b>${esc(h.player)}</b> ` : "";
     const score = h.kind === "play" || h.kind === "bonus" || h.kind === "penalty"
@@ -536,7 +544,7 @@ function renderHistory() {
     const text = h.kind === "play" ? linkWords(h) : esc(h.text);
     return `<li class="h-${h.kind}"><span>${who}${text}</span><span class="h-right">${replay}${score}</span></li>`;
   }).join("");
-  if (atBottom) el.scrollTop = el.scrollHeight;
+  scrollHistoryToEnd();
 }
 
 function setStatus(msg, kind = "", html = false) {
@@ -825,6 +833,11 @@ document.addEventListener("pointermove", onPointerMove, { passive: false });
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", () => { if (drag?.ghost) { drag.ghost.remove(); drag.el.classList.remove("dragging"); } drag = null; });
 $("board").addEventListener("click", onBoardClick);
+$("history").addEventListener("scroll", () => {
+  const el = $("history");
+  followHistory = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+});
+new ResizeObserver(scrollHistoryToEnd).observe($("history"));
 $("history").addEventListener("click", (e) => {
   const btn = e.target.closest(".replay-btn");
   if (btn) replayFrom(Number(btn.dataset.replay));
