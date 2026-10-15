@@ -21,6 +21,11 @@
         <button id="new-local" class="btn" title="Play on this device, passing it between turns">New pass &amp; play</button>
       </div>
     </section>
+    <section class="card">
+      <h2>Scoreboard</h2>
+      <p class="muted small">Total points across every finished game.</p>
+      <div id="scoreboard"><p class="muted">Loading…</p></div>
+    </section>
   </main>
 
   <script src="{{ url_for('static', filename='lobby.js') }}"></script>

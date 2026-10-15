@@ -8,11 +8,14 @@ Usage:
 
 import argparse
 import hmac
+import json
 import logging
+import os
 import re
 import secrets
 import socket
 import threading
+import time
 import urllib.request
 from functools import wraps
 
@@ -28,6 +31,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Pick up template edits without a restart (a restart would end every game in progress).
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.permanent_session_lifetime = 60 * 60 * 24 * 90
+# One JSON line per finished game; the scoreboard is totaled from it on request.
+app.config["FINISHED_GAMES"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".finished_games.jsonl")
 
 lock = threading.Lock()
 games = {}
@@ -88,7 +93,7 @@ def logout():
 # ---------- request log ----------
 
 # The lobby and game pages poll these every few seconds; logging each one would bury everything else.
-POLLS = re.compile(r"^/api/games(/[^/]+)?$")
+POLLS = re.compile(r"^/api/(games(/[^/]+)?|scoreboard)$")
 
 
 @app.after_request
@@ -189,7 +194,10 @@ def game_action(fn):
         body = request.get_json(silent=True) or {}
         with lock:
             game = get_game(game_id)
+            was_finished = game.status == "finished"
             extra = fn(game, acting_user(game), body)
+            if game.status == "finished" and not was_finished and not game.local:
+                record_finished(game)
             state = game.view(acting_user(game))
         if extra:
             state["result"] = extra
@@ -248,6 +256,51 @@ def preview(game_id):
         return jsonify({"ok": False, "error": str(e)})
 
 
+# ---------- scoreboard ----------
+
+def record_finished(game):
+    """Append a finished game's final scores to the scoreboard file.
+    Pass-and-play games aren't recorded: their players are typed-in names, not logins."""
+    entry = {
+        "id": game.id,
+        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "players": [{"name": p["name"], "score": p["score"]} for p in game.players],
+        "winners": game.winners,
+    }
+    try:
+        with open(app.config["FINISHED_GAMES"], "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        log.exception("Couldn't record finished game %s", game.id)
+
+
+def cumulative_scores():
+    """Total points per player over every finished game, highest first.
+    Names match ignoring case, so "Mom" and "mom" are one row (shown as first spelled)."""
+    try:
+        with open(app.config["FINISHED_GAMES"], encoding="utf-8") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return []
+    totals = {}
+    for line in lines:
+        try:
+            players = [(str(p["name"]), int(p["score"])) for p in json.loads(line)["players"]]
+        except (ValueError, KeyError, TypeError):
+            continue  # e.g. a line cut short by a crash mid-write
+        for name, score in players:
+            row = totals.setdefault(name.casefold(), {"name": name, "score": 0})
+            row["score"] += score
+    return sorted(totals.values(), key=lambda r: (-r["score"], r["name"].casefold()))
+
+
+@app.route("/api/scoreboard", methods=["GET"])
+@login_required(api=True)
+def scoreboard():
+    with lock:
+        return jsonify({"players": cumulative_scores()})
+
+
 # ---------- CLI ----------
 
 def lan_ip():
@@ -283,7 +336,8 @@ def main():
     app.config["LOG_POLLS"] = args.log_polls
 
     app.config["PASSWORD"] = args.password
-    # A fresh key each run: restarting the server logs everyone out (games are in memory only).
+    # A fresh key each run: restarting the server logs everyone out (games are in memory only;
+    # only the final scores of finished games are kept, in .finished_games.jsonl).
     app.secret_key = secrets.token_hex(32)
     dictionary = Dictionary()
 

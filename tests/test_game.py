@@ -1,7 +1,9 @@
 """Game-flow tests (exchange, end game) and the HTTP preview endpoint."""
 
+import json
 import os
 import sys
+import tempfile
 import unittest
 from collections import Counter
 from unittest import mock
@@ -311,6 +313,78 @@ class PassAndPlay(unittest.TestCase):
         self.assertIn("2 to 4", self.create(list("ABCDE")).get_json()["error"])
         self.assertIn("different", self.create(["Mom", "Mom"]).get_json()["error"])
         self.assertIn("30", self.create(["Mom", "x" * 31]).get_json()["error"])
+
+
+class Scoreboard(unittest.TestCase):
+    """Finished games are appended to a JSONL file and totaled per player."""
+
+    def setUp(self):
+        server.app.config["PASSWORD"] = "pw"
+        server.app.secret_key = "test"
+        server.dictionary = DICT
+        server.games.clear()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = os.path.join(tmp.name, ".finished_games.jsonl")
+        patcher = mock.patch.dict(server.app.config, {"FINISHED_GAMES": self.path})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.clients = {}
+
+    def client(self, name):
+        if name not in self.clients:
+            self.clients[name] = server.app.test_client()
+            self.clients[name].post("/login", data={"username": name, "password": "pw"})
+        return self.clients[name]
+
+    def finish_by_passing(self, racks):
+        """Play an online game with these players and racks, passing until it ends."""
+        host, *others = racks
+        game_id = self.client(host).post("/api/games").get_json()["id"]
+        for name in others:
+            self.client(name).post(f"/api/games/{game_id}/join")
+        self.client(host).post(f"/api/games/{game_id}/start")
+        game = server.games[game_id]
+        for p in game.players:
+            p["rack"] = list(racks[p["name"]])
+        for _ in range(6):
+            self.client(game.players[game.turn]["name"]).post(f"/api/games/{game_id}/pass")
+        self.assertEqual(game.status, "finished")
+        return game_id
+
+    def scoreboard(self):
+        return self.client("Host").get("/api/scoreboard").get_json()["players"]
+
+    def test_empty_before_any_game_finishes(self):
+        self.assertEqual(self.scoreboard(), [])
+
+    def test_finished_games_are_recorded_once_and_totaled(self):
+        game_id = self.finish_by_passing({"Mom": "QAAAAAA", "Dad": "EEEEEEE"})  # -16, -7
+        self.client("Mom").post(f"/api/games/{game_id}/pass")  # rejected: the game is over
+        self.finish_by_passing({"mom": "E", "Kid": "Z"})  # -1, -10
+        with open(self.path) as f:
+            lines = [json.loads(line) for line in f]
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0]["id"], game_id)
+        self.assertEqual(lines[0]["winners"], ["Dad"])
+        self.assertEqual(self.scoreboard(), [
+            {"name": "Dad", "score": -7},
+            {"name": "Kid", "score": -10},
+            {"name": "Mom", "score": -17},  # "mom" counts as Mom
+        ])
+
+    def test_pass_and_play_games_are_not_recorded(self):
+        game_id = self.client("Host").post("/api/games", json={"local": True, "players": ["A", "B"]}).get_json()["id"]
+        for _ in range(6):
+            self.client("Host").post(f"/api/games/{game_id}/pass")
+        self.assertEqual(server.games[game_id].status, "finished")
+        self.assertFalse(os.path.exists(self.path))
+        self.assertEqual(self.scoreboard(), [])
+
+    def test_skips_damaged_lines(self):
+        with open(self.path, "w") as f:
+            f.write('{"players": [{"name": "Ann", "score": 120}]}\n{"players": [{"name": "Bo')
+        self.assertEqual(self.scoreboard(), [{"name": "Ann", "score": 120}])
 
 
 class FileAccess(unittest.TestCase):

@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Scrabble at Home: final scores of finished games (the scoreboard)
+.finished_games.jsonl

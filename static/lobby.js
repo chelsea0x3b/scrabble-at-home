@@ -49,6 +49,26 @@ async function loadGames() {
   }).join("");
 }
 
+async function loadScoreboard() {
+  const { players } = await api("/api/scoreboard");
+  const el = document.getElementById("scoreboard");
+  if (!players.length) {
+    el.innerHTML = '<p class="muted">No finished games yet.</p>';
+    return;
+  }
+  const rows = players.map((p, i) => `
+    <tr>
+      <td class="rank">${i + 1}</td>
+      <td>${esc(p.name)}</td>
+      <td class="num">${p.score.toLocaleString()}</td>
+    </tr>`).join("");
+  el.innerHTML = `
+    <table class="scoreboard">
+      <thead><tr><th class="rank">#</th><th>Player</th><th class="num">Points</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
 async function newGame(body) {
   try {
     const { id } = await api("/api/games", body);
@@ -62,4 +82,8 @@ document.getElementById("new-game").addEventListener("click", () => newGame({}))
 document.getElementById("new-local").addEventListener("click", () => newGame({ local: true }));
 
 loadGames();
-setInterval(() => loadGames().catch(() => {}), 4000);
+loadScoreboard();
+setInterval(() => {
+  loadGames().catch(() => {});
+  loadScoreboard().catch(() => {});
+}, 4000);

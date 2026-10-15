@@ -30,6 +30,9 @@ the server falls back to TWL06 (`twl06.zip`).
 ## Data
 
 Games live in memory only. Restarting the server ends all games and logs everyone out.
+When an online game finishes (pass and play doesn't count), its final scores are appended to `.finished_games.jsonl` (one JSON
+line per game, git-ignored). The lobby's scoreboard totals each player's points from that
+file, matching names regardless of case. Delete the file to reset the scoreboard.
 Edits to templates, CSS and JS show up on a page refresh without a restart; changes to the
 Python code need one.
 

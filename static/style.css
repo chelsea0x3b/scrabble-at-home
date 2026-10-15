@@ -136,6 +136,12 @@ input {
 }
 .player-chip.me { color: var(--accent-strong); }
 .new-game-row { margin-top: 12px; }
+.scoreboard { width: 100%; border-collapse: collapse; }
+.scoreboard th, .scoreboard td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+.scoreboard th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.scoreboard tbody tr:last-child td { border-bottom: none; }
+.scoreboard .rank { width: 2ch; color: var(--muted); }
+.scoreboard .num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .player-list { list-style: none; padding: 0; margin: 0 0 16px; }
 .player-list li {
