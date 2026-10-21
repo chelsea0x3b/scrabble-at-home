@@ -904,5 +904,27 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && isMyTurn() && placed.size && !busy && $("blank-modal").hidden && $("handoff-modal").hidden) $("submit-btn").click();
 });
 
+// Type a letter to pick it up from the rack (space for a blank), then click a square to play it.
+document.addEventListener("keydown", (e) => {
+  if (!state || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  const letter = e.key === " " ? "?" : /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : null;
+  if (!letter) return;
+  if (!$("blank-modal").hidden) {
+    // Choosing what a blank stands for: type the letter instead of clicking it.
+    if (letter !== "?") [...$("blank-letters").children].find((b) => b.textContent === letter)?.click();
+    return e.preventDefault();
+  }
+  if (!isPlayer() || exchangeMode || !$("handoff-modal").hidden) return;
+  e.preventDefault();
+  const used = placedIds();
+  const matches = rack.filter((t) => t.letter === letter && !used.has(t.id));
+  if (!matches.length) return;
+  // Pressing the same letter again moves on to the next copy of it.
+  const at = matches.findIndex((t) => t.id === selectedId);
+  selectedId = matches[(at + 1) % matches.length].id;
+  render();
+});
+
 poll();
 setInterval(poll, 2000);
